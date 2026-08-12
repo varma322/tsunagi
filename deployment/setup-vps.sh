@@ -1,0 +1,295 @@
+#!/usr/bin/env bash
+#
+# Tsunagi VPS installer for a server that is ALREADY RUNNING OTHER SITES.
+#
+# It assumes the host nginx owns ports 80 and 443 and that certbot is already
+# managing certificates there — the arrangement on srv1239365, where seven other
+# sites are served this way. Tsunagi therefore publishes nothing publicly: its
+# stack binds to 127.0.0.1 only, and the host nginx reverse-proxies to it, the
+# same shape as the existing opscenter site.
+#
+# It will NOT:
+#   * bind host ports 80 or 443 from Docker (that would collide with nginx)
+#   * modify or reload any existing nginx site
+#   * touch other Docker projects, or open new firewall ports
+#   * regenerate secrets on a re-run (that would orphan the database volume)
+#
+# Usage, as root on the VPS:
+#   ./setup-vps.sh --domain sms.example.com --email you@example.com
+#   ./setup-vps.sh --domain sms.example.com --no-tls      # skip certbot
+#   ./setup-vps.sh --domain sms.example.com --port 8091   # if 8090 is taken
+#
+set -euo pipefail
+
+REPO_URL="${TSUNAGI_REPO:-https://github.com/varma322/Tsunagi.git}"
+INSTALL_DIR="${TSUNAGI_DIR:-/opt/tsunagi}"
+BIND_PORT="8090"
+DOMAIN=""
+EMAIL=""
+WANT_TLS=1
+
+log()  { printf '\n\033[1;34m==>\033[0m %s\n' "$*"; }
+ok()   { printf '    \033[0;32m✓\033[0m %s\n' "$*"; }
+warn() { printf '    \033[0;33m!\033[0m %s\n' "$*"; }
+die()  { printf '\n\033[0;31mfailed:\033[0m %s\n' "$*" >&2; exit 1; }
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --domain) DOMAIN="${2:-}"; shift 2 ;;
+    --email)  EMAIL="${2:-}";  shift 2 ;;
+    --port)   BIND_PORT="${2:-}"; shift 2 ;;
+    --no-tls) WANT_TLS=0; shift ;;
+    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+    *) die "unknown option: $1" ;;
+  esac
+done
+
+[ "$(id -u)" -eq 0 ] || die "run as root"
+[ -n "$DOMAIN" ] || die "--domain is required, e.g. --domain sms.example.com"
+[ "$WANT_TLS" -eq 0 ] || [ -n "$EMAIL" ] || die "--email is required unless --no-tls"
+
+# --------------------------------------------------------------------------
+log "Preflight"
+
+for tool in docker git curl nginx; do
+  command -v "$tool" >/dev/null || die "$tool is not installed"
+done
+docker compose version >/dev/null 2>&1 || die "the docker compose plugin is missing"
+ok "docker $(docker --version | awk '{print $3}' | tr -d ,), compose $(docker compose version --short)"
+
+systemctl is-active --quiet nginx || die "host nginx is not running; this script proxies through it"
+ok "host nginx is running and owns :80/:443"
+
+if ss -tuln | grep -q "127.0.0.1:${BIND_PORT} \|0.0.0.0:${BIND_PORT} \|:::${BIND_PORT} "; then
+  die "port ${BIND_PORT} is already in use; pass --port with a free one"
+fi
+ok "127.0.0.1:${BIND_PORT} is free"
+
+if [ -e "/etc/nginx/sites-enabled/tsunagi" ]; then
+  warn "an nginx site named 'tsunagi' already exists; it will be left as-is"
+fi
+
+# --------------------------------------------------------------------------
+log "Swap"
+
+# The dashboard image compiles ~1800 modules with Vite. On one core with under
+# 2 GB available that build is the single most likely thing to be OOM-killed,
+# and this box ships with no swap at all.
+if [ "$(swapon --show --noheadings | wc -l)" -gt 0 ]; then
+  ok "swap already present: $(swapon --show=NAME,SIZE --noheadings | tr '\n' ' ')"
+elif [ "$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)" -ge 6000 ]; then
+  ok "plenty of RAM; skipping swap"
+else
+  log "  creating a 2G swapfile (no swap configured, and RAM is tight)"
+  fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
+  chmod 600 /swapfile
+  mkswap /swapfile >/dev/null
+  swapon /swapfile
+  grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >>/etc/fstab
+  ok "2G swap enabled and persisted in /etc/fstab"
+fi
+
+# --------------------------------------------------------------------------
+log "Source"
+
+if [ -d "$INSTALL_DIR/.git" ]; then
+  git -C "$INSTALL_DIR" fetch --quiet --tags origin
+  git -C "$INSTALL_DIR" pull --quiet --ff-only || warn "could not fast-forward; leaving the checkout as it is"
+  ok "updated $INSTALL_DIR"
+elif [ -f "$(dirname "$0")/docker-compose.yml" ]; then
+  # Running from inside a checkout that is not at INSTALL_DIR.
+  INSTALL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+  ok "using the checkout this script lives in: $INSTALL_DIR"
+else
+  git clone --quiet "$REPO_URL" "$INSTALL_DIR"
+  ok "cloned into $INSTALL_DIR"
+fi
+
+DEPLOY_DIR="$INSTALL_DIR/deployment"
+[ -f "$DEPLOY_DIR/docker-compose.yml" ] || die "no docker-compose.yml under $DEPLOY_DIR"
+
+# --------------------------------------------------------------------------
+log "Configuration"
+
+ENV_FILE="$DEPLOY_DIR/.env"
+
+if [ -f "$ENV_FILE" ]; then
+  # Never regenerate: POSTGRES_PASSWORD must keep matching the existing volume,
+  # and rotating the bootstrap key would strand the dashboard credential.
+  ok "keeping the existing $ENV_FILE"
+else
+  POSTGRES_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)"
+  BOOTSTRAP_KEY="tsn_key_$(openssl rand -hex 24)"
+
+  cat >"$ENV_FILE" <<ENV
+# Generated by setup-vps.sh on $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+POSTGRES_USER=tsunagi
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+POSTGRES_DB=tsunagi
+
+# Admin API key for the dashboard. Pinned here rather than generated at first
+# boot so it survives a container rebuild and is not lost to log rotation.
+TSUNAGI_BOOTSTRAP_API_KEY=${BOOTSTRAP_KEY}
+
+# Devices enrol with single-use codes issued from the dashboard, so the legacy
+# shared setup key stays unset.
+# TSUNAGI_SETUP_KEY=
+
+TSUNAGI_CORS_ORIGINS=https://${DOMAIN}
+
+# Loopback only. The host nginx is the sole public entrance; publishing 80/443
+# from Docker here would collide with the other sites on this server.
+HTTP_PORT=127.0.0.1:${BIND_PORT}
+ENV
+  chmod 600 "$ENV_FILE"
+  ok "wrote $ENV_FILE (0600)"
+fi
+
+ADMIN_KEY="$(grep -E '^TSUNAGI_BOOTSTRAP_API_KEY=' "$ENV_FILE" | cut -d= -f2-)"
+
+# --------------------------------------------------------------------------
+log "Building and starting the stack (this is the slow part)"
+
+cd "$DEPLOY_DIR"
+docker compose up -d --build
+
+printf '    waiting for the API'
+for _ in $(seq 1 60); do
+  if curl -fsS "http://127.0.0.1:${BIND_PORT}/health" >/dev/null 2>&1; then
+    printf '\n'; ok "API healthy: $(curl -fsS "http://127.0.0.1:${BIND_PORT}/health")"
+    break
+  fi
+  printf '.'; sleep 2
+done
+curl -fsS "http://127.0.0.1:${BIND_PORT}/health" >/dev/null 2>&1 \
+  || die "the stack did not become healthy; check: docker compose -f $DEPLOY_DIR/docker-compose.yml logs"
+
+# --------------------------------------------------------------------------
+log "nginx site"
+
+SITE="/etc/nginx/sites-available/tsunagi"
+
+if [ -f "$SITE" ]; then
+  ok "$SITE already exists; leaving it untouched"
+else
+  cat >"$SITE" <<NGINX
+# Tsunagi — proxies to the Docker stack bound on 127.0.0.1:${BIND_PORT}.
+# certbot adds the TLS block and the port 80 redirect below.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};
+
+    # SMS bodies are small; this mainly caps abusive batch uploads.
+    client_max_body_size 2m;
+
+    access_log /var/log/nginx/tsunagi.access.log;
+    error_log  /var/log/nginx/tsunagi.error.log;
+
+    # The dashboard's live feed. Needs the HTTP/1.1 upgrade dance, which
+    # proxy_params does not provide.
+    location /ws/ {
+        proxy_pass http://127.0.0.1:${BIND_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_read_timeout 3600s;
+    }
+
+    # GET /api/v1/messages/wait long-polls, so the read timeout must exceed
+    # its 60s ceiling.
+    location /api/ {
+        include proxy_params;
+        proxy_pass http://127.0.0.1:${BIND_PORT};
+        proxy_read_timeout 120s;
+    }
+
+    location / {
+        include proxy_params;
+        proxy_pass http://127.0.0.1:${BIND_PORT};
+    }
+}
+NGINX
+  ln -sfn "$SITE" /etc/nginx/sites-enabled/tsunagi
+  ok "created $SITE and enabled it"
+fi
+
+# Validate the WHOLE nginx config before reloading: a syntax error here would
+# take down every other site on this box, not just Tsunagi.
+if ! nginx -t 2>/dev/null; then
+  rm -f /etc/nginx/sites-enabled/tsunagi
+  nginx -t || true
+  die "nginx config test failed; the Tsunagi site was unlinked and nothing was reloaded"
+fi
+systemctl reload nginx
+ok "nginx validated and reloaded; existing sites untouched"
+
+# --------------------------------------------------------------------------
+if [ "$WANT_TLS" -eq 1 ]; then
+  log "TLS"
+
+  if [ -d "/etc/letsencrypt/live/${DOMAIN}" ]; then
+    ok "a certificate for ${DOMAIN} already exists"
+  elif ! command -v certbot >/dev/null; then
+    warn "certbot is not installed; skipping. Install it and run: certbot --nginx -d ${DOMAIN}"
+  else
+    # HTTP-01 is answered on port 80 through the host nginx. If the record is
+    # proxied by Cloudflare with "Always Use HTTPS" on, the challenge is
+    # redirected before it reaches this server — grey-cloud the record, issue,
+    # then re-enable the proxy.
+    if certbot --nginx -d "$DOMAIN" --email "$EMAIL" --agree-tos --no-eff-email --redirect --non-interactive; then
+      ok "certificate issued and nginx updated"
+    else
+      warn "certbot failed. Most likely the DNS record is proxied by Cloudflare"
+      warn "and the challenge never reached this host. Set the record to"
+      warn "DNS-only, re-run: certbot --nginx -d ${DOMAIN}, then re-enable it."
+    fi
+  fi
+fi
+
+# --------------------------------------------------------------------------
+log "Verifying"
+
+SCHEME="http"; [ -d "/etc/letsencrypt/live/${DOMAIN}" ] && SCHEME="https"
+
+if curl -fsS --max-time 20 "${SCHEME}://${DOMAIN}/health" >/dev/null 2>&1; then
+  ok "${SCHEME}://${DOMAIN}/health responds"
+else
+  warn "could not reach ${SCHEME}://${DOMAIN}/health from this host."
+  warn "That is expected while DNS still points elsewhere, or behind a proxy"
+  warn "that blocks loopback requests. Locally it is healthy on :${BIND_PORT}."
+fi
+
+if [ -f "$INSTALL_DIR/scripts/smoke_test.py" ] && command -v python3 >/dev/null; then
+  python3 -m pip install --quiet httpx 2>/dev/null || true
+  python3 "$INSTALL_DIR/scripts/smoke_test.py" \
+      --url "http://127.0.0.1:${BIND_PORT}" --api-key "$ADMIN_KEY" || \
+      warn "smoke test reported failures (see above)"
+fi
+
+# --------------------------------------------------------------------------
+cat <<SUMMARY
+
+$(printf '\033[1;32m')Tsunagi is installed.$(printf '\033[0m')
+
+  Dashboard   ${SCHEME}://${DOMAIN}
+  Admin key   ${ADMIN_KEY}
+
+  Sign in with that key, then Devices → Add a device to generate a
+  single-use enrolment code for the phone.
+
+  Source      ${INSTALL_DIR}
+  Config      ${DEPLOY_DIR}/.env   (0600 — holds every secret)
+  Bound on    127.0.0.1:${BIND_PORT}  (not publicly reachable; nginx fronts it)
+
+  Logs        docker compose -f ${DEPLOY_DIR}/docker-compose.yml logs -f api
+  Restart     docker compose -f ${DEPLOY_DIR}/docker-compose.yml restart
+  Update      cd ${INSTALL_DIR} && git pull && \\
+              docker compose -f ${DEPLOY_DIR}/docker-compose.yml up -d --build
+  Backup      docker compose -f ${DEPLOY_DIR}/docker-compose.yml exec -T postgres \\
+              pg_dump -U tsunagi tsunagi | gzip > tsunagi-\$(date +%F).sql.gz
+
+SUMMARY
