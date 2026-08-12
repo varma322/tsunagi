@@ -15,8 +15,13 @@
 #
 # Usage, as root on the VPS:
 #   ./setup-vps-baremetal.sh --domain sms.example.com --email you@example.com
-#   ./setup-vps-baremetal.sh --domain sms.example.com --skip-build   # dist/ prebuilt
+#   ./setup-vps-baremetal.sh --domain sms.example.com --dist /tmp/dist.tar.gz
 #   ./setup-vps-baremetal.sh --domain sms.example.com --no-tls
+#
+# --dist takes a dashboard built elsewhere (a directory or a .tar.gz), which is
+# the sensible route on a one-core box: build on your machine, ship the output.
+# The build is plain static assets, so the OS that produced them does not
+# matter -- a Windows build and a Linux build are byte-identical.
 #
 set -euo pipefail
 
@@ -30,6 +35,7 @@ DOMAIN=""
 EMAIL=""
 WANT_TLS=1
 BUILD_FRONTEND=1
+DIST_SOURCE=""
 
 log()  { printf '\n\033[1;34m==>\033[0m %s\n' "$*"; }
 ok()   { printf '    \033[0;32m✓\033[0m %s\n' "$*"; }
@@ -43,6 +49,7 @@ while [ $# -gt 0 ]; do
     --port)   API_PORT="${2:-}"; shift 2 ;;
     --no-tls) WANT_TLS=0; shift ;;
     --skip-build) BUILD_FRONTEND=0; shift ;;
+    --dist) DIST_SOURCE="${2:-}"; BUILD_FRONTEND=0; shift 2 ;;
     -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
     *) die "unknown option: $1" ;;
   esac
@@ -213,9 +220,40 @@ log "Dashboard"
 
 DIST="$INSTALL_DIR/frontend/dist"
 
-if [ "$BUILD_FRONTEND" -eq 0 ]; then
-  [ -d "$DIST" ] || die "--skip-build was passed but $DIST does not exist"
-  ok "using the prebuilt $DIST"
+if [ -n "$DIST_SOURCE" ]; then
+  [ -e "$DIST_SOURCE" ] || die "--dist path not found: $DIST_SOURCE"
+  rm -rf "$DIST"; mkdir -p "$DIST"
+  if [ -d "$DIST_SOURCE" ]; then
+    cp -a "$DIST_SOURCE/." "$DIST/"
+  else
+    # A tarball may or may not have a leading dist/ component; accept both.
+    tmp="$(mktemp -d)"
+    tar xzf "$DIST_SOURCE" -C "$tmp"
+    if [ -d "$tmp/dist" ]; then cp -a "$tmp/dist/." "$DIST/"; else cp -a "$tmp/." "$DIST/"; fi
+    rm -rf "$tmp"
+  fi
+  [ -f "$DIST/index.html" ] || die "no index.html under $DIST — is $DIST_SOURCE really a Vite build?"
+  ok "installed the prebuilt dashboard from $DIST_SOURCE ($(find "$DIST" -type f | wc -l) files)"
+
+elif [ "$BUILD_FRONTEND" -eq 0 ]; then
+  if [ ! -f "$DIST/index.html" ]; then
+    cat >&2 <<HINT
+
+  $DIST does not exist. frontend/dist is gitignored, so a fresh clone never
+  has it. Build on your own machine and ship the output:
+
+      # on your machine, in the repo
+      cd frontend && npm run build
+      tar czf dist.tar.gz dist                 # or: scp -r dist root@host:/tmp/dist
+      scp dist.tar.gz root@${DOMAIN}:/tmp/
+
+      # then re-run here
+      $0 --domain ${DOMAIN} --dist /tmp/dist.tar.gz
+
+HINT
+    die "no prebuilt dashboard found"
+  fi
+  ok "using the existing $DIST"
 else
   cd "$INSTALL_DIR/frontend"
   # Cap the heap: the default is a fraction of total RAM, which on a 4 GB box
