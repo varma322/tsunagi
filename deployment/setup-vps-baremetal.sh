@@ -25,7 +25,7 @@
 #
 set -euo pipefail
 
-REPO_URL="${TSUNAGI_REPO:-https://github.com/varma322/Tsunagi.git}"
+REPO_URL="${TSUNAGI_REPO:-https://github.com/varma322/tsunagi.git}"
 INSTALL_DIR="${TSUNAGI_DIR:-/opt/tsunagi}"
 SERVICE_USER="tsunagi"
 ENV_DIR="/etc/tsunagi"
@@ -112,6 +112,11 @@ else
   useradd --system --home "$INSTALL_DIR" --shell /usr/sbin/nologin "$SERVICE_USER"
   ok "created system user $SERVICE_USER"
 fi
+
+# The checkout ends up owned by the service user, so git refuses to operate on
+# it as root ("dubious ownership") and every later `git pull` fails. Declare it
+# trusted before touching it.
+git config --global --add safe.directory "$INSTALL_DIR" 2>/dev/null || true
 
 if [ -d "$INSTALL_DIR/.git" ]; then
   git -C "$INSTALL_DIR" fetch --quiet --tags origin
