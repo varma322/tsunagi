@@ -149,6 +149,66 @@ class TsunagiRepositoryTest {
         assertTrue(api.uploadedBatches.isEmpty())
     }
 
+    // --- presence --------------------------------------------------------
+
+    @Test
+    fun `an idle phone still checks in so it does not look dead`() = runTest {
+        deviceDao.device = registeredDevice()
+
+        repository().sync()
+
+        assertEquals(
+            "without a check-in the server never hears from a quiet phone and " +
+                "reports it offline forever",
+            1,
+            api.heartbeats,
+        )
+    }
+
+    @Test
+    fun `uploading counts as a check-in, so no extra request is made`() = runTest {
+        deviceDao.device = registeredDevice()
+        seedPending(1)
+
+        repository().sync()
+
+        assertEquals(1, api.uploadedBatches.size)
+        assertEquals("the upload already refreshed last_seen", 0, api.heartbeats)
+    }
+
+    @Test
+    fun `a check-in refused with 403 reports the device was switched off`() = runTest {
+        deviceDao.device = registeredDevice()
+        api.heartbeatBehaviour = { throw httpError(403) }
+
+        val outcome = repository().sync()
+
+        assertTrue("a disabled phone must learn its state", outcome is SyncOutcome.Failure)
+        assertNotNull("403 must not drop the registration", deviceDao.device)
+    }
+
+    @Test
+    fun `a check-in refused with 401 re-enrols`() = runTest {
+        deviceDao.device = registeredDevice()
+        api.heartbeatBehaviour = { throw httpError(401) }
+
+        val outcome = repository().sync()
+
+        assertTrue(outcome is SyncOutcome.Retry)
+        assertNull("an unknown token must be discarded", deviceDao.device)
+    }
+
+    @Test
+    fun `a failed check-in does not mask a successful upload`() = runTest {
+        deviceDao.device = registeredDevice()
+        seedPending(2)
+        api.heartbeatBehaviour = { throw httpError(500) }
+
+        val outcome = repository().sync()
+
+        assertEquals(SyncOutcome.Success(2), outcome)
+    }
+
     @Test
     fun `messages stranded in UPLOADING are requeued`() = runTest {
         seedPending(1)

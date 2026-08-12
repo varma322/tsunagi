@@ -242,7 +242,13 @@ Requires user/admin scope. Response `200 OK`:
 ```
 
 `status` is `true` when the device has been seen within the online window
-(default: 5 minutes) **and** is enabled. `enabled` is `false` when an admin has
+(`TSUNAGI_DEVICE_ONLINE_WINDOW_SECONDS`, default 1800) **and** is enabled.
+
+The phone refreshes `last_seen` on every authenticated call, including a
+check-in it makes when it has nothing to upload. Without that check-in a quiet
+device would be indistinguishable from a dead one; the window is wider than the
+15-minute floor Android imposes on background work, so one missed beat does not
+flip a healthy device to offline. `enabled` is `false` when an admin has
 switched it off. Revoked devices are omitted entirely.
 
 ### Turn a Device On or Off

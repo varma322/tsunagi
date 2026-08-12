@@ -39,6 +39,14 @@ data class BatchResponse(
 )
 
 @Serializable
+data class IdentityResponse(
+    @SerialName("kind") val kind: String,
+    @SerialName("scope") val scope: String,
+    @SerialName("name") val name: String? = null,
+    @SerialName("id") val id: String? = null,
+)
+
+@Serializable
 data class HealthResponse(
     @SerialName("status") val status: String,
     @SerialName("version") val version: String? = null,
@@ -66,6 +74,16 @@ interface TsunagiApi {
         @Header("Authorization") authorization: String,
         @Body body: RegisterRequest,
     ): RegisterResponse
+
+    /**
+     * Authenticated no-op. The server refreshes the device's last_seen on any
+     * authenticated call, so this is what lets an idle phone report that it is
+     * still alive.
+     */
+    @GET("api/v1/me")
+    suspend fun heartbeat(
+        @Header("Authorization") authorization: String,
+    ): IdentityResponse
 
     @POST("api/v1/messages/batch")
     suspend fun uploadBatch(

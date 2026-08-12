@@ -9,6 +9,7 @@ import com.vce.tsunagi.data.local.SyncStatusCount
 import com.vce.tsunagi.data.remote.BatchRequest
 import com.vce.tsunagi.data.remote.BatchResponse
 import com.vce.tsunagi.data.remote.HealthResponse
+import com.vce.tsunagi.data.remote.IdentityResponse
 import com.vce.tsunagi.data.remote.RegisterRequest
 import com.vce.tsunagi.data.remote.RegisterResponse
 import com.vce.tsunagi.data.remote.TsunagiApi
@@ -119,7 +120,17 @@ open class FakeApi : TsunagiApi {
         BatchResponse(accepted = request.messages.size, created = request.messages.size, duplicates = 0)
     }
 
-    override suspend fun health(): HealthResponse = HealthResponse("ok", "0.1.0")
+    var heartbeats = 0
+    var heartbeatBehaviour: () -> IdentityResponse = {
+        IdentityResponse(kind = "device", scope = "device", name = "Test Phone", id = "device-1")
+    }
+
+    override suspend fun health(): HealthResponse = HealthResponse("ok", "1.0.0")
+
+    override suspend fun heartbeat(authorization: String): IdentityResponse {
+        heartbeats++
+        return heartbeatBehaviour()
+    }
 
     override suspend fun register(
         authorization: String,

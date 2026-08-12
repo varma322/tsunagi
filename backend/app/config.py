@@ -23,7 +23,11 @@ class Settings(BaseSettings):
     bootstrap_api_key: str | None = None
     auto_create_schema: bool = True
 
-    device_online_window_seconds: int = 300
+    # Must exceed the phone's check-in interval, or a healthy device reads as
+    # offline between beats. WorkManager will not schedule periodic work more
+    # often than every 15 minutes, and Doze delays it further, so this allows
+    # one missed cycle before calling a device offline.
+    device_online_window_seconds: int = 1800
     event_log_max: int = 1000
 
     # Generous by default: a phone uploading a backlog batches its messages, so

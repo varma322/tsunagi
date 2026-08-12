@@ -47,7 +47,8 @@ would make "turn it back on" ambiguous.
 
 The online/offline flag the API returns is **derived**, not stored: a device
 counts as online when `last_seen` falls within
-`TSUNAGI_DEVICE_ONLINE_WINDOW_SECONDS` (default 300). Persisting it would mean
+`TSUNAGI_DEVICE_ONLINE_WINDOW_SECONDS` (default 1800 — the phone checks in every
+15 minutes at best, so the window allows one missed beat). Persisting it would mean
 every device silently going stale needed a background job to flip the column.
 
 Indexes:

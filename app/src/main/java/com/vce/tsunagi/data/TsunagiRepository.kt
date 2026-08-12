@@ -117,12 +117,27 @@ class TsunagiRepository(
 
         prune(config.retentionDays)
 
-        return if (uploaded == 0) {
-            SyncOutcome.Idle("No pending messages.")
-        } else {
-            SyncOutcome.Success(uploaded)
+        if (uploaded == 0) {
+            // Nothing to upload, but still check in. Without this the server
+            // only ever hears from a phone that has traffic, so a healthy but
+            // quiet device is indistinguishable from a dead one — and a device
+            // switched off server-side would not find out until its next SMS.
+            heartbeat(api, device)?.let { return it }
+            return SyncOutcome.Idle("No pending messages.")
         }
+        return SyncOutcome.Success(uploaded)
     }
+
+    /** Returns null when the check-in succeeded, or the outcome to report. */
+    private suspend fun heartbeat(api: TsunagiApi, device: DeviceEntity): SyncOutcome? =
+        try {
+            api.heartbeat(ApiFactory.bearer(device.token))
+            null
+        } catch (error: HttpException) {
+            handleHttpError(error, "heartbeat")
+        } catch (error: IOException) {
+            SyncOutcome.Retry("Network error: ${error.message}")
+        }
 
     /**
      * Drops locally stored messages the server has already confirmed, so a
@@ -192,7 +207,9 @@ class TsunagiRepository(
     private suspend fun handleHttpError(error: HttpException, stage: String): SyncOutcome {
         val code = error.code()
         return when {
-            code == 401 && stage == "upload" -> {
+            // Not during registration: a 401 there means the enrolment code was
+            // refused, and dropping the record would just loop.
+            code == 401 && stage != "registration" -> {
                 deviceDao.clear()
                 SyncOutcome.Retry("Device token rejected; will re-register.")
             }
