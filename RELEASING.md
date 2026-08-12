@@ -64,9 +64,32 @@ Android will not install an unsigned APK.
 update that upgrades an existing install):
 
 ```bash
-keytool -genkey -v -keystore tsunagi-release.jks \
+keytool -genkeypair -v -keystore tsunagi-release.jks -storetype PKCS12 \
     -keyalg RSA -keysize 4096 -validity 10000 -alias tsunagi
 ```
+
+Run it from the repository root, so the keystore lands where
+`keystore.properties` resolves it.
+
+> **`keytool` is not on PATH on Windows.** It ships with the JDK, but the Oracle
+> `javapath` shim exposes only `java` and `javac`. Find a real one:
+>
+> ```powershell
+> Get-ChildItem "C:\Program Files\Java" -Directory |
+>   ForEach-Object { Join-Path $_.FullName "bin\keytool.exe" } |
+>   Where-Object { Test-Path $_ }
+> ```
+>
+> Android Studio also bundles one at
+> `C:\Program Files\Android\Android Studio\jbr\bin\keytool.exe`. Any JDK works —
+> the keystore format is not tied to the JDK that made it. Invoke it with the
+> call operator, since the path has spaces:
+>
+> ```powershell
+> & "C:\Program Files\Java\jdk-26.0.1\bin\keytool.exe" -genkeypair -v `
+>     -keystore tsunagi-release.jks -storetype PKCS12 `
+>     -keyalg RSA -keysize 4096 -validity 10000 -alias tsunagi
+> ```
 
 Then create `keystore.properties` at the repository root:
 
