@@ -34,3 +34,4 @@ deployment/.env
 keystore.properties
 *.jks
 *.keystore
+frontend/dist.tar.gz
