@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Tsunagi - Devices</title>
+<!-- Fonts & Icons -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-low": "#1c1b1d",
+                        "on-error-container": "#ffdad6",
+                        "primary": "#c0c1ff",
+                        "outline": "#908fa0",
+                        "background": "#131315",
+                        "surface-variant": "#353437",
+                        "outline-variant": "#464554",
+                        "on-surface-variant": "#c7c4d7",
+                        "on-secondary-container": "#a7b6cc",
+                        "tertiary-fixed-dim": "#4edea3",
+                        "surface-bright": "#39393b",
+                        "surface-tint": "#c0c1ff",
+                        "surface-container-lowest": "#0e0e10",
+                        "secondary-container": "#39485a",
+                        "inverse-surface": "#e5e1e4",
+                        "on-error": "#690005",
+                        "secondary-fixed-dim": "#b9c8de",
+                        "secondary": "#b9c8de",
+                        "on-primary-container": "#0d0096",
+                        "on-tertiary-fixed-variant": "#005236",
+                        "tertiary-fixed": "#6ffbbe",
+                        "secondary-fixed": "#d4e4fa",
+                        "inverse-primary": "#494bd6",
+                        "surface-container": "#201f22",
+                        "on-primary-fixed": "#07006c",
+                        "on-secondary-fixed-variant": "#39485a",
+                        "primary-container": "#8083ff",
+                        "primary-fixed": "#e1e0ff",
+                        "on-tertiary-fixed": "#002113",
+                        "on-secondary": "#233143",
+                        "surface": "#131315",
+                        "on-tertiary": "#003824",
+                        "primary-fixed-dim": "#c0c1ff",
+                        "error-container": "#93000a",
+                        "on-secondary-fixed": "#0d1c2d",
+                        "surface-dim": "#131315",
+                        "surface-container-highest": "#353437",
+                        "inverse-on-surface": "#313032",
+                        "on-primary-fixed-variant": "#2f2ebe",
+                        "on-surface": "#e5e1e4",
+                        "error": "#ffb4ab",
+                        "on-background": "#e5e1e4",
+                        "tertiary": "#4edea3",
+                        "tertiary-container": "#00885d",
+                        "surface-container-high": "#2a2a2c",
+                        "on-primary": "#1000a9",
+                        "on-tertiary-container": "#000703"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "xs": "4px",
+                        "margin-safe": "32px",
+                        "sm": "8px",
+                        "unit": "4px",
+                        "xl": "40px",
+                        "lg": "24px",
+                        "md": "16px"
+                    },
+                    "fontFamily": {
+                        "display": ["Geist"],
+                        "headline-lg-mobile": ["Geist"],
+                        "headline-md": ["Geist"],
+                        "body-lg": ["Inter"],
+                        "label-md": ["Geist"],
+                        "headline-lg": ["Geist"],
+                        "code-sm": ["JetBrains Mono"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "display": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "fontWeight": "500" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "code-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        /* Custom Styles & Utilities */
+        body {
+            background-color: theme('colors.background');
+            color: theme('colors.on-background');
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        .glass-panel {
+            background: rgba(28, 27, 29, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* Toggle Switch Customization */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: theme('colors.primary');
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: theme('colors.primary');
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="min-h-screen flex flex-col md:hidden selection:bg-primary selection:text-on-primary">
+<!-- TopAppBar (Mobile) -->
+<header class="bg-surface/80 dark:bg-surface/80 backdrop-blur-xl sticky top-0 w-full z-50 border-b border-outline-variant/30 flex justify-between items-center px-lg py-sm transition-all duration-200">
+<button aria-label="Menu" class="text-on-surface-variant hover:bg-surface-variant/50 p-2 rounded-full transition-colors active:scale-95">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<h1 class="font-display text-headline-md font-bold text-primary tracking-tight">Tsunagi</h1>
+<button aria-label="Notifications" class="text-on-surface-variant hover:bg-surface-variant/50 p-2 rounded-full transition-colors active:scale-95">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 p-md pb-24 overflow-y-auto space-y-md">
+<!-- Page Header -->
+<div class="mb-lg">
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Devices</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Manage and monitor connected hardware.</p>
+</div>
+<!-- Device List Bento Grid (Vertical for Mobile) -->
+<div class="grid grid-cols-1 gap-md">
+<!-- Device Card 1: Android Pixel 7 (Syncing) -->
+<article class="bg-surface-container border border-outline-variant/30 rounded-xl p-md shadow-sm relative overflow-hidden group">
+<!-- Syncing Animation/Indicator background subtlety -->
+<div class="absolute -right-10 -top-10 w-32 h-32 bg-primary/10 rounded-full blur-2xl animate-pulse pointer-events-none"></div>
+<header class="flex justify-between items-start mb-sm relative z-10">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface-variant flex items-center justify-center border border-outline-variant/20">
+<span class="material-symbols-outlined text-primary" data-icon="smartphone">smartphone</span>
+</div>
+<div>
+<h3 class="font-label-md text-label-md text-on-surface">Android Pixel 7</h3>
+<div class="flex items-center gap-1 mt-0.5">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="font-code-sm text-code-sm text-primary">Syncing</span>
+</div>
+</div>
+</div>
+<button aria-label="More options" class="text-on-surface-variant hover:text-on-surface p-1">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</header>
+<div class="grid grid-cols-2 gap-sm mb-md relative z-10 border-t border-b border-outline-variant/10 py-sm">
+<div class="flex flex-col">
+<span class="font-code-sm text-code-sm text-on-surface-variant">Last Seen</span>
+<span class="font-body-md text-body-md text-on-surface">Just now</span>
+</div>
+<div class="flex flex-col">
+<span class="font-code-sm text-code-sm text-on-surface-variant">Platform</span>
+<span class="font-body-md text-body-md text-on-surface">Android 14</span>
+</div>
+<div class="flex flex-col col-span-2 mt-2">
+<div class="flex justify-between mb-1">
+<span class="font-code-sm text-code-sm text-on-surface-variant">Sync Health</span>
+<span class="font-code-sm text-code-sm text-tertiary">99%</span>
+</div>
+<div class="w-full bg-surface-variant rounded-full h-1.5">
+<div class="bg-tertiary h-1.5 rounded-full" style="width: 99%"></div>
+</div>
+</div>
+</div>
+<footer class="flex items-center justify-between relative z-10 gap-sm">
+<button class="flex-1 py-2 px-3 border border-outline-variant/50 rounded-lg font-label-md text-label-md text-on-surface hover:bg-surface-variant/30 transition-colors flex justify-center items-center gap-2">
+<span class="material-symbols-outlined text-[18px]" data-icon="autorenew">autorenew</span>
+                        Token
+                    </button>
+<div class="flex items-center gap-2">
+<span class="font-label-md text-label-md text-on-surface-variant">Active</span>
+<div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+<input checked="" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-on-primary border-4 border-surface-container appearance-none cursor-pointer z-10 checked:right-0 checked:border-primary transition-all duration-300" id="toggle-1" name="toggle" type="checkbox"/>
+<label class="toggle-label block overflow-hidden h-5 rounded-full bg-primary cursor-pointer transition-colors duration-300" for="toggle-1"></label>
+</div>
+</div>
+</footer>
+</article>
+<!-- Device Card 2: SMS Gateway 01 (Offline) -->
+<article class="bg-surface-container border border-outline-variant/30 rounded-xl p-md shadow-sm relative overflow-hidden group opacity-80 grayscale-[20%]">
+<header class="flex justify-between items-start mb-sm relative z-10">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface-variant flex items-center justify-center border border-outline-variant/20">
+<span class="material-symbols-outlined text-error" data-icon="dns">dns</span>
+</div>
+<div>
+<h3 class="font-label-md text-label-md text-on-surface">SMS Gateway 01</h3>
+<div class="flex items-center gap-1 mt-0.5">
+<span class="w-2 h-2 rounded-full bg-error"></span>
+<span class="font-code-sm text-code-sm text-error">Offline</span>
+</div>
+</div>
+</div>
+<button aria-label="More options" class="text-on-surface-variant hover:text-on-surface p-1">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</header>
+<div class="grid grid-cols-2 gap-sm mb-md relative z-10 border-t border-b border-outline-variant/10 py-sm">
+<div class="flex flex-col">
+<span class="font-code-sm text-code-sm text-on-surface-variant">Last Seen</span>
+<span class="font-body-md text-body-md text-on-surface">2m ago</span>
+</div>
+<div class="flex flex-col">
+<span class="font-code-sm text-code-sm text-on-surface-variant">Platform</span>
+<span class="font-body-md text-body-md text-on-surface">Linux x64</span>
+</div>
+<div class="flex flex-col col-span-2 mt-2">
+<div class="flex justify-between mb-1">
+<span class="font-code-sm text-code-sm text-on-surface-variant">Sync Health</span>
+<span class="font-code-sm text-code-sm text-error">Disconnected</span>
+</div>
+<div class="w-full bg-surface-variant rounded-full h-1.5">
+<div class="bg-error h-1.5 rounded-full" style="width: 0%"></div>
+</div>
+</div>
+</div>
+<footer class="flex items-center justify-between relative z-10 gap-sm">
+<button class="flex-1 py-2 px-3 border border-outline-variant/50 rounded-lg font-label-md text-label-md text-on-surface hover:bg-surface-variant/30 transition-colors flex justify-center items-center gap-2 opacity-50 cursor-not-allowed" disabled="">
+<span class="material-symbols-outlined text-[18px]" data-icon="autorenew">autorenew</span>
+                        Token
+                    </button>
+<div class="flex items-center gap-2">
+<span class="font-label-md text-label-md text-on-surface-variant">Active</span>
+<div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+<input class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-surface-variant border-4 border-surface-container appearance-none cursor-pointer z-10 transition-all duration-300" id="toggle-2" name="toggle" type="checkbox"/>
+<label class="toggle-label block overflow-hidden h-5 rounded-full bg-surface-variant cursor-pointer transition-colors duration-300" for="toggle-2"></label>
+</div>
+</div>
+</footer>
+</article>
+<!-- Device Card 3: Local Tester (Standby) -->
+<article class="bg-surface-container border border-outline-variant/30 rounded-xl p-md shadow-sm relative overflow-hidden group">
+<header class="flex justify-between items-start mb-sm relative z-10">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface-variant flex items-center justify-center border border-outline-variant/20">
+<span class="material-symbols-outlined text-secondary" data-icon="laptop_mac">laptop_mac</span>
+</div>
+<div>
+<h3 class="font-label-md text-label-md text-on-surface">Local Tester</h3>
+<div class="flex items-center gap-1 mt-0.5">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="font-code-sm text-code-sm text-secondary">Standby</span>
+</div>
+</div>
+</div>
+<button aria-label="More options" class="text-on-surface-variant hover:text-on-surface p-1">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</header>
+<div class="grid grid-cols-2 gap-sm mb-md relative z-10 border-t border-b border-outline-variant/10 py-sm">
+<div class="flex flex-col">
+<span class="font-code-sm text-code-sm text-on-surface-variant">Last Seen</span>
+<span class="font-body-md text-body-md text-on-surface">1h ago</span>
+</div>
+<div class="flex flex-col">
+<span class="font-code-sm text-code-sm text-on-surface-variant">Platform</span>
+<span class="font-body-md text-body-md text-on-surface">macOS</span>
+</div>
+<div class="flex flex-col col-span-2 mt-2">
+<div class="flex justify-between mb-1">
+<span class="font-code-sm text-code-sm text-on-surface-variant">Sync Health</span>
+<span class="font-code-sm text-code-sm text-secondary">Idle</span>
+</div>
+<div class="w-full bg-surface-variant rounded-full h-1.5">
+<div class="bg-secondary h-1.5 rounded-full" style="width: 100%"></div>
+</div>
+</div>
+</div>
+<footer class="flex items-center justify-between relative z-10 gap-sm">
+<button class="flex-1 py-2 px-3 border border-outline-variant/50 rounded-lg font-label-md text-label-md text-on-surface hover:bg-surface-variant/30 transition-colors flex justify-center items-center gap-2">
+<span class="material-symbols-outlined text-[18px]" data-icon="autorenew">autorenew</span>
+                        Token
+                    </button>
+<div class="flex items-center gap-2">
+<span class="font-label-md text-label-md text-on-surface-variant">Active</span>
+<div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+<input checked="" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-on-primary border-4 border-surface-container appearance-none cursor-pointer z-10 checked:right-0 checked:border-primary transition-all duration-300" id="toggle-3" name="toggle" type="checkbox"/>
+<label class="toggle-label block overflow-hidden h-5 rounded-full bg-primary cursor-pointer transition-colors duration-300" for="toggle-3"></label>
+</div>
+</div>
+</footer>
+</article>
+</div>
+</main>
+<!-- Floating Action Button (Add New Device) -->
+<button aria-label="Add New Device" class="fixed right-6 bottom-24 w-14 h-14 bg-primary text-on-primary rounded-xl shadow-[0_10px_15px_-3px_rgba(0,0,0,0.5)] flex items-center justify-center hover:bg-primary-container transition-all active:scale-90 z-40">
+<span class="material-symbols-outlined text-[28px]" data-icon="add">add</span>
+</button>
+<!-- BottomNavBar (Mobile) -->
+<nav class="bg-surface-container-highest/90 dark:bg-surface-container-lowest/90 backdrop-blur-xl fixed bottom-0 w-full z-50 rounded-t-xl flex justify-around items-center h-16 pb-safe border-t border-outline-variant/10 shadow-[0_-4px_12px_rgba(0,0,0,0.1)]">
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-variant/30 transition-transform duration-200 active:scale-90 w-16 h-full rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="home">home</span>
+<span class="font-label-md text-[10px] leading-tight">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-variant/30 transition-transform duration-200 active:scale-90 w-16 h-full rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="chat">chat</span>
+<span class="font-label-md text-[10px] leading-tight">Chat</span>
+</a>
+<!-- Active Tab: Devices -->
+<a class="flex flex-col items-center justify-center text-primary font-bold active:bg-surface-variant/30 transition-transform duration-200 active:scale-90 w-16 h-full rounded-lg relative" href="#">
+<!-- Active indicator dot -->
+<div class="absolute -top-1 w-8 h-1 bg-primary rounded-b-full"></div>
+<span class="material-symbols-outlined mb-1" data-icon="router" data-weight="fill">router</span>
+<span class="font-label-md text-[10px] leading-tight">Devices</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-variant/30 transition-transform duration-200 active:scale-90 w-16 h-full rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="key">key</span>
+<span class="font-label-md text-[10px] leading-tight">Keys</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-variant/30 transition-transform duration-200 active:scale-90 w-16 h-full rounded-lg" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="more_horiz">more_horiz</span>
+<span class="font-label-md text-[10px] leading-tight">More</span>
+</a>
+</nav>
+</body></html>

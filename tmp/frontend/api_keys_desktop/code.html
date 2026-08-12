@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>API Keys - Tsunagi</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Inter:wght@400;500&amp;family=JetBrains+Mono:wght@400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-fixed-variant": "#39485a",
+                        "on-surface": "#e5e1e4",
+                        "surface-container-high": "#2a2a2c",
+                        "tertiary": "#4edea3",
+                        "surface": "#131315",
+                        "on-secondary-fixed": "#0d1c2d",
+                        "on-tertiary-fixed-variant": "#005236",
+                        "on-tertiary-container": "#000703",
+                        "on-surface-variant": "#c7c4d7",
+                        "on-primary-fixed": "#07006c",
+                        "outline": "#908fa0",
+                        "inverse-primary": "#494bd6",
+                        "surface-container-low": "#1c1b1d",
+                        "secondary-fixed-dim": "#b9c8de",
+                        "surface-container-lowest": "#0e0e10",
+                        "on-error-container": "#ffdad6",
+                        "tertiary-fixed": "#6ffbbe",
+                        "secondary-container": "#39485a",
+                        "background": "#131315",
+                        "outline-variant": "#464554",
+                        "secondary": "#b9c8de",
+                        "surface-container-highest": "#353437",
+                        "on-secondary": "#233143",
+                        "primary": "#c0c1ff",
+                        "on-secondary-container": "#a7b6cc",
+                        "surface-tint": "#c0c1ff",
+                        "inverse-surface": "#e5e1e4",
+                        "tertiary-container": "#00885d",
+                        "surface-variant": "#353437",
+                        "primary-container": "#8083ff",
+                        "on-tertiary-fixed": "#002113",
+                        "primary-fixed-dim": "#c0c1ff",
+                        "error-container": "#93000a",
+                        "error": "#ffb4ab",
+                        "on-tertiary": "#003824",
+                        "on-error": "#690005",
+                        "on-primary-fixed-variant": "#2f2ebe",
+                        "inverse-on-surface": "#313032",
+                        "secondary-fixed": "#d4e4fa",
+                        "on-background": "#e5e1e4",
+                        "on-primary-container": "#0d0096",
+                        "surface-dim": "#131315",
+                        "surface-container": "#201f22",
+                        "surface-bright": "#39393b",
+                        "primary-fixed": "#e1e0ff",
+                        "tertiary-fixed-dim": "#4edea3",
+                        "on-primary": "#1000a9"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "margin-safe": "32px",
+                        "sm": "8px",
+                        "md": "16px",
+                        "xl": "40px",
+                        "unit": "4px",
+                        "xs": "4px",
+                        "lg": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Geist"],
+                        "label-md": ["Geist"],
+                        "code-sm": ["JetBrains Mono"],
+                        "display": ["Geist"],
+                        "headline-lg": ["Geist"],
+                        "headline-lg-mobile": ["Geist"],
+                        "body-lg": ["Inter"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "fontWeight": "500" }],
+                        "code-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "display": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: #09090b; color: #e5e1e4; }
+        .glass-panel { background: rgba(18, 18, 20, 0.7); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.05); }
+        .data-table-row:hover { background-color: #1c1c1f; }
+    </style>
+</head>
+<body class="min-h-screen flex text-on-surface antialiased selection:bg-primary-container selection:text-on-primary-container">
+<!-- SideNavBar (from JSON) -->
+<nav class="hidden md:flex bg-surface dark:bg-surface text-primary dark:text-primary font-label-md text-label-md fixed left-0 top-0 h-screen w-[260px] bg-surface-container-low dark:bg-surface-container-low backdrop-blur-[20px] border-r border-outline-variant/10 flex flex-col py-lg px-md z-50">
+<div class="mb-xl px-sm">
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary flex items-center gap-sm">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">sms</span>
+                Tsunagi
+            </h1>
+<p class="text-on-surface-variant text-xs mt-1">SMS Synchronization</p>
+</div>
+<div class="flex-1 flex flex-col gap-xs">
+<a class="flex items-center gap-md px-sm py-2 rounded-lg text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-lg">dashboard</span>
+                Dashboard
+            </a>
+<a class="flex items-center gap-md px-sm py-2 rounded-lg text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-lg">sms</span>
+                Messages
+            </a>
+<a class="flex items-center gap-md px-sm py-2 rounded-lg text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-lg">devices</span>
+                Devices
+            </a>
+<a class="flex items-center gap-md px-sm py-2 rounded-lg text-primary dark:text-primary bg-primary-container/10 border-r-2 border-primary hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-colors duration-200 scale-[0.98] transition-transform" href="#">
+<span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1;">vpn_key</span>
+                API Keys
+            </a>
+<a class="flex items-center gap-md px-sm py-2 rounded-lg text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-lg">event_note</span>
+                Events
+            </a>
+<a class="flex items-center gap-md px-sm py-2 rounded-lg text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-lg">settings</span>
+                Settings
+            </a>
+</div>
+<div class="mt-auto pt-lg">
+<button class="w-full py-2 bg-[#6366f1] text-white rounded-lg font-label-md text-label-md hover:bg-primary-container transition-colors shadow-[0_4px_14px_0_rgba(99,102,241,0.39)] flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm">add</span>
+                New API Key
+            </button>
+</div>
+</nav>
+<!-- TopNavBar (from JSON) -->
+<header class="hidden md:flex bg-surface/80 dark:bg-surface/80 text-primary dark:text-primary font-label-md text-label-md fixed top-0 right-0 left-[260px] h-16 backdrop-blur-[20px] border-b border-outline-variant/10 justify-between items-center px-lg z-40">
+<div class="flex items-center w-64 bg-surface-container rounded-lg px-3 py-1.5 border border-outline-variant/30 focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+<span class="material-symbols-outlined text-on-surface-variant text-sm mr-2">search</span>
+<input class="bg-transparent border-none text-on-surface text-sm focus:ring-0 w-full p-0 placeholder-on-surface-variant/50" placeholder="Search keys..." type="text"/>
+</div>
+<div class="flex items-center gap-md">
+<button class="text-on-surface hover:bg-surface-container p-2 rounded-full transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface hover:bg-surface-container p-2 rounded-full transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+<div class="h-8 w-8 rounded-full bg-surface-container-high border border-outline-variant/50 overflow-hidden ml-2 cursor-pointer flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant">person</span>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 ml-0 md:ml-[260px] pt-16 md:pt-16 p-md md:p-gutter max-w-7xl relative">
+<!-- Header Section -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-xl gap-4 pt-lg">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">API Keys</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Manage programmatic access to your Tsunagi resources.</p>
+</div>
+<button class="bg-[#6366f1] text-white px-4 py-2 rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity flex items-center gap-2 shadow-[0_4px_14px_0_rgba(99,102,241,0.2)]">
+<span class="material-symbols-outlined text-sm">key</span>
+                Create New API Key
+            </button>
+</div>
+<!-- API Keys Data Table/List -->
+<div class="bg-[#18181b] rounded-xl border border-[#27272a] overflow-hidden shadow-sm">
+<!-- Table Header -->
+<div class="grid grid-cols-12 gap-4 px-md py-3 bg-[#18181b] border-b border-[#27272a] font-label-md text-label-md text-on-surface-variant hidden md:grid">
+<div class="col-span-3">Name</div>
+<div class="col-span-4">Key</div>
+<div class="col-span-2">Created</div>
+<div class="col-span-2">Permissions</div>
+<div class="col-span-1 text-right">Actions</div>
+</div>
+<!-- List Body -->
+<div class="divide-y divide-[#27272a]">
+<!-- Row 1: Production -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-4 px-md py-4 items-center data-table-row transition-colors">
+<div class="col-span-1 md:col-span-3">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
+<span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface">Production Key</p>
+<p class="font-body-md text-xs text-on-surface-variant md:hidden">Last used: 2 mins ago</p>
+</div>
+</div>
+</div>
+<div class="col-span-1 md:col-span-4">
+<div class="flex items-center bg-[#09090b] border border-[#27272a] rounded-md px-3 py-1.5 w-fit group">
+<span class="font-code-sm text-code-sm text-on-surface-variant opacity-80">ts_live_••••••••••••••••</span>
+<button class="ml-3 text-on-surface-variant hover:text-primary transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center" title="Copy to clipboard">
+<span class="material-symbols-outlined text-[16px]">content_copy</span>
+</button>
+</div>
+</div>
+<div class="col-span-1 md:col-span-2 hidden md:block">
+<p class="font-body-md text-body-md text-on-surface-variant">Oct 12, 2023</p>
+<p class="text-xs text-on-surface-variant opacity-60 mt-0.5">Last used: 2m ago</p>
+</div>
+<div class="col-span-1 md:col-span-2 flex gap-2">
+<span class="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-code-sm text-xs border border-primary/20">Read</span>
+<span class="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-code-sm text-xs border border-primary/20">Write</span>
+</div>
+<div class="col-span-1 md:col-span-1 flex justify-end">
+<button class="text-on-surface-variant hover:text-error transition-colors p-1.5 rounded-md hover:bg-error/10 flex items-center" title="Revoke Key">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+</div>
+</div>
+<!-- Row 2: Staging -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-4 px-md py-4 items-center data-table-row transition-colors">
+<div class="col-span-1 md:col-span-3">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
+<span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface">Staging Sync</p>
+<p class="font-body-md text-xs text-on-surface-variant md:hidden">Last used: 1 hr ago</p>
+</div>
+</div>
+</div>
+<div class="col-span-1 md:col-span-4">
+<div class="flex items-center bg-[#09090b] border border-[#27272a] rounded-md px-3 py-1.5 w-fit group">
+<span class="font-code-sm text-code-sm text-on-surface-variant opacity-80">ts_test_••••••••••••••••</span>
+<button class="ml-3 text-on-surface-variant hover:text-primary transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center" title="Copy to clipboard">
+<span class="material-symbols-outlined text-[16px]">content_copy</span>
+</button>
+</div>
+</div>
+<div class="col-span-1 md:col-span-2 hidden md:block">
+<p class="font-body-md text-body-md text-on-surface-variant">Nov 04, 2023</p>
+<p class="text-xs text-on-surface-variant opacity-60 mt-0.5">Last used: 1h ago</p>
+</div>
+<div class="col-span-1 md:col-span-2 flex gap-2">
+<span class="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-code-sm text-xs border border-primary/20">Read</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-code-sm text-xs border border-outline-variant/30">Write</span>
+</div>
+<div class="col-span-1 md:col-span-1 flex justify-end">
+<button class="text-on-surface-variant hover:text-error transition-colors p-1.5 rounded-md hover:bg-error/10 flex items-center" title="Revoke Key">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+</div>
+</div>
+<!-- Row 3: Old App (Revoked) -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-4 px-md py-4 items-center bg-[#131315]/50">
+<div class="col-span-1 md:col-span-3 opacity-50">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center">
+<span class="w-2 h-2 rounded-full bg-outline-variant"></span>
+</div>
+<div>
+<p class="font-label-md text-label-md text-on-surface line-through">Legacy API V1</p>
+<p class="font-body-md text-xs text-error md:hidden">Revoked</p>
+</div>
+</div>
+</div>
+<div class="col-span-1 md:col-span-4 opacity-50">
+<div class="flex items-center bg-transparent px-3 py-1.5 w-fit">
+<span class="font-code-sm text-code-sm text-on-surface-variant">ts_live_••••••••••••••••</span>
+</div>
+</div>
+<div class="col-span-1 md:col-span-2 hidden md:block opacity-50">
+<p class="font-body-md text-body-md text-on-surface-variant">Jan 15, 2023</p>
+<p class="text-xs text-error mt-0.5 font-medium">Revoked Dec 01</p>
+</div>
+<div class="col-span-1 md:col-span-2 flex gap-2 opacity-50">
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-code-sm text-xs border border-outline-variant/30">Read</span>
+</div>
+<div class="col-span-1 md:col-span-1 flex justify-end">
+<!-- No action for revoked -->
+</div>
+</div>
+</div>
+</div>
+<!-- Info Callout -->
+<div class="mt-lg p-md rounded-lg bg-surface-container border border-outline-variant/20 flex gap-3 items-start">
+<span class="material-symbols-outlined text-primary text-xl mt-0.5">info</span>
+<div>
+<h4 class="font-label-md text-label-md text-on-surface">Secret Key Visibility</h4>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1 text-sm">For your security, full secret keys are only displayed once upon creation. If you lose a key, you will need to revoke it and generate a new one.</p>
+</div>
+</div>
+</main>
+</body></html>

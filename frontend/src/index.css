@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+
+/*
+ * Tsunagi Core design system.
+ * Source of truth: tmp/frontend/tsunagi_core/DESIGN.md
+ *
+ * Dark-only by design. Depth comes from tonal layering rather than shadows,
+ * and the accent colours are functional: indigo means "primary action",
+ * emerald means "synced/connected", amber means "pending", red means "failed".
+ */
+@theme {
+  --color-surface: #131315;
+  --color-surface-lowest: #0e0e10;
+  --color-surface-low: #1c1b1d;
+  --color-surface-container: #201f22;
+  --color-surface-high: #2a2a2c;
+  --color-surface-highest: #353437;
+
+  --color-content: #e5e1e4;
+  --color-content-muted: #c7c4d7;
+  --color-content-subtle: #908fa0;
+
+  --color-line: #464554;
+  --color-line-strong: #908fa0;
+
+  --color-brand: #c0c1ff;
+  --color-brand-strong: #8083ff;
+  --color-brand-contrast: #1000a9;
+
+  /* Chart series fill. --color-brand is a text accent: at L 0.83 / C 0.09 it
+     sits outside the mark lightness band and reads gray as a filled shape.
+     --color-brand-strong passes lightness, chroma, and 3:1 contrast against
+     the card surface, so data marks use it instead. */
+  --color-chart: #8083ff;
+
+  --color-ok: #4edea3;
+  --color-ok-dim: #00885d;
+  --color-warn: #ffcc80;
+  --color-danger: #ffb4ab;
+  --color-danger-dim: #93000a;
+
+  --font-display: "Geist Variable", "Geist", system-ui, sans-serif;
+  --font-sans: "Inter Variable", "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-card: 1rem;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-surface);
+    color: var(--color-content);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+
+  /* Keyboard focus must stay visible against the near-black surfaces. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-brand-strong);
+    color: #fff;
+  }
+}
+
+@layer components {
+  .tsunagi-card {
+    background-color: var(--color-surface-container);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+  }
+
+  .tsunagi-input {
+    width: 100%;
+    background-color: var(--color-surface-lowest);
+    border: 1px solid var(--color-line);
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--color-content);
+  }
+
+  .tsunagi-input::placeholder {
+    color: var(--color-content-subtle);
+  }
+
+  .tsunagi-input:focus {
+    outline: none;
+    border-color: var(--color-brand);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand) 20%, transparent);
+  }
+}
+
+/* Scrollbars, so long tables do not punch a light rectangle into the UI. */
+* {
+  scrollbar-color: var(--color-surface-highest) transparent;
+  scrollbar-width: thin;
+}

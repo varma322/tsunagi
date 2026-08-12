@@ -1,0 +1,5 @@
+# Production driver. Installed in Docker (Python 3.12); may lack prebuilt wheels
+# on very new CPython releases, so it is kept out of the base requirements to
+# let local development run on SQLite without a compiler.
+-r requirements.txt
+asyncpg>=0.30.0

@@ -1,0 +1,69 @@
+name: tsunagi
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tsunagi}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tsunagi}
+      POSTGRES_DB: ${POSTGRES_DB:-tsunagi}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tsunagi} -d ${POSTGRES_DB:-tsunagi}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  api:
+    build:
+      # Repo root, so the image can include scripts/ alongside the backend.
+      context: ..
+      dockerfile: backend/Dockerfile
+    environment:
+      TSUNAGI_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tsunagi}:${POSTGRES_PASSWORD:-tsunagi}@postgres:5432/${POSTGRES_DB:-tsunagi}
+      TSUNAGI_REDIS_URL: redis://redis:6379/0
+      # Optional legacy shared secret. Leave it unset and register devices with
+      # single-use enrolment codes from the dashboard instead.
+      TSUNAGI_SETUP_KEY: ${TSUNAGI_SETUP_KEY:-}
+      TSUNAGI_BOOTSTRAP_API_KEY: ${TSUNAGI_BOOTSTRAP_API_KEY:-}
+      TSUNAGI_CORS_ORIGINS: ${TSUNAGI_CORS_ORIGINS:-http://localhost}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../frontend
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    volumes:
+      # Mounted into templates/ (not conf.d/) so the TLS overlay can replace it
+      # at the same target path. nginx's entrypoint renders it into conf.d/.
+      - ./nginx/tsunagi.conf:/etc/nginx/templates/default.conf.template:ro
+    depends_on:
+      - api
+      - frontend
+    restart: unless-stopped
+
+# Redis holds no durable state, so backups cover postgres-data alone.
+volumes:
+  postgres-data:

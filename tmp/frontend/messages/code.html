@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Tsunagi Messages</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-container-low": "#1c1b1d",
+                      "on-error-container": "#ffdad6",
+                      "primary": "#c0c1ff",
+                      "outline": "#908fa0",
+                      "background": "#131315",
+                      "surface-variant": "#353437",
+                      "outline-variant": "#464554",
+                      "on-surface-variant": "#c7c4d7",
+                      "on-secondary-container": "#a7b6cc",
+                      "tertiary-fixed-dim": "#4edea3",
+                      "surface-bright": "#39393b",
+                      "surface-tint": "#c0c1ff",
+                      "surface-container-lowest": "#0e0e10",
+                      "secondary-container": "#39485a",
+                      "inverse-surface": "#e5e1e4",
+                      "on-error": "#690005",
+                      "secondary-fixed-dim": "#b9c8de",
+                      "secondary": "#b9c8de",
+                      "on-primary-container": "#0d0096",
+                      "on-tertiary-fixed-variant": "#005236",
+                      "tertiary-fixed": "#6ffbbe",
+                      "secondary-fixed": "#d4e4fa",
+                      "inverse-primary": "#494bd6",
+                      "surface-container": "#201f22",
+                      "on-primary-fixed": "#07006c",
+                      "on-secondary-fixed-variant": "#39485a",
+                      "primary-container": "#8083ff",
+                      "primary-fixed": "#e1e0ff",
+                      "on-tertiary-fixed": "#002113",
+                      "on-secondary": "#233143",
+                      "surface": "#131315",
+                      "on-tertiary": "#003824",
+                      "primary-fixed-dim": "#c0c1ff",
+                      "error-container": "#93000a",
+                      "on-secondary-fixed": "#0d1c2d",
+                      "surface-dim": "#131315",
+                      "surface-container-highest": "#353437",
+                      "inverse-on-surface": "#313032",
+                      "on-primary-fixed-variant": "#2f2ebe",
+                      "on-surface": "#e5e1e4",
+                      "error": "#ffb4ab",
+                      "on-background": "#e5e1e4",
+                      "tertiary": "#4edea3",
+                      "tertiary-container": "#00885d",
+                      "surface-container-high": "#2a2a2c",
+                      "on-primary": "#1000a9",
+                      "on-tertiary-container": "#000703"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "gutter": "24px",
+                      "xs": "4px",
+                      "margin-safe": "32px",
+                      "sm": "8px",
+                      "unit": "4px",
+                      "xl": "40px",
+                      "lg": "24px",
+                      "md": "16px"
+              },
+              "fontFamily": {
+                      "display": [
+                              "Geist"
+                      ],
+                      "headline-lg-mobile": [
+                              "Geist"
+                      ],
+                      "headline-md": [
+                              "Geist"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "label-md": [
+                              "Geist"
+                      ],
+                      "headline-lg": [
+                              "Geist"
+                      ],
+                      "code-sm": [
+                              "JetBrains Mono"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "display": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-md": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "code-sm": [
+                              "13px",
+                              {
+                                      "lineHeight": "18px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background antialiased min-h-screen flex flex-col md:flex-row overflow-hidden">
+<!-- Top App Bar (Mobile Only) -->
+<header class="md:hidden sticky top-0 w-full z-50 bg-surface/80 dark:bg-surface/80 backdrop-blur-xl border-b border-outline-variant/30 transition-all duration-200 active:scale-95">
+<div class="flex justify-between items-center px-lg py-sm">
+<button class="text-on-surface-variant hover:bg-surface-variant/50 p-2 rounded-full transition-colors">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<div class="font-display text-headline-md font-bold text-primary">Tsunagi</div>
+<button class="text-on-surface-variant hover:bg-surface-variant/50 p-2 rounded-full transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+</div>
+</header>
+<!-- Navigation Drawer (Desktop) -->
+<nav class="hidden md:flex flex-col h-full p-md bg-surface-container dark:bg-surface-container-low border-r border-outline-variant/20 shadow-xl fixed left-0 top-0 w-[280px] z-[60] transition-colors duration-200">
+<div class="flex items-center gap-4 mb-xl px-2">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-variant shrink-0">
+<img class="object-cover w-full h-full" data-alt="A futuristic minimalist avatar placeholder featuring deep charcoal and subtle indigo glow, conveying a technical admin profile in a high-tech corporate interface. The lighting is low-key with high contrast elements." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD_6dDDvuCQk3fE_fC_lv4e4lIv00VAOFo5AUxiUt64hxp10Sz0vBpKgSqkhmBRXQ7HuIx0TDCAZMOzcp0jiYfqun8yPxC9ygG9OhLzqCV5rFRw2RwfYpfYJQ0U_nAAAh5GtHQwMZA_SuQ6qvm7CEc3t6uGCsI2PJ9TdqPjLwt-hwqsOXkclGH2rzMu1vNHn2QnBbMIEzBgy2hkKb7ltEXQ27IaIQbJqhodsjD_jWSnZAeEu0-ONOXcnA"/>
+</div>
+<div class="flex flex-col">
+<span class="font-display text-headline-md font-bold text-primary">Tsunagi Admin</span>
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-tertiary-fixed-dim"></span>
+<span class="font-body-md text-on-surface-variant text-body-md">Online</span>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-2 font-label-md text-label-md">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg bg-secondary-container text-on-secondary-container font-bold transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="sms" data-weight="fill" style="font-variation-settings: 'FILL' 1;">sms</span>
+<span>Messages</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="devices">devices</span>
+<span>Devices</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="vpn_key">vpn_key</span>
+<span>API Keys</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="event_note">event_note</span>
+<span>Events</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50 transition-colors mt-auto" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+</div>
+<div class="mt-4 px-4 font-body-md text-body-md text-outline">v1.2.0</div>
+</nav>
+<!-- Main Content Canvas -->
+<main class="flex-1 flex flex-col md:ml-[280px] h-full overflow-hidden relative">
+<!-- Search and Filter Bar -->
+<div class="px-md md:px-lg py-md border-b border-outline-variant/10 bg-surface/50 backdrop-blur-md z-10 sticky top-0 md:static">
+<div class="flex gap-sm">
+<div class="relative flex-1">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline" data-icon="search">search</span>
+<input class="w-full bg-surface-container border-outline-variant/50 border rounded-lg pl-10 pr-4 py-2 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-outline/70" placeholder="Search messages..." type="text"/>
+</div>
+<button class="flex items-center justify-center p-2 rounded-lg bg-surface-container border border-outline-variant/50 text-on-surface-variant hover:bg-surface-variant/50 transition-colors">
+<span class="material-symbols-outlined" data-icon="tune">tune</span>
+</button>
+</div>
+<div class="flex gap-2 mt-3 overflow-x-auto pb-2 scrollbar-hide">
+<button class="px-3 py-1 rounded-full bg-surface-variant text-on-surface font-label-md text-label-md whitespace-nowrap text-xs">All Senders</button>
+<button class="px-3 py-1 rounded-full border border-outline-variant/50 text-on-surface-variant font-label-md text-label-md whitespace-nowrap text-xs hover:bg-surface-variant/30">Last 7 Days</button>
+<button class="px-3 py-1 rounded-full border border-outline-variant/50 text-on-surface-variant font-label-md text-label-md whitespace-nowrap text-xs hover:bg-surface-variant/30">Gateway 1</button>
+</div>
+</div>
+<!-- Message List & Side Panel Layout -->
+<div class="flex-1 flex overflow-hidden">
+<!-- Message List -->
+<div class="flex-1 overflow-y-auto border-r border-outline-variant/10 pb-[80px] md:pb-0 relative z-0">
+<!-- Message Item 1 -->
+<div class="p-md md:p-lg border-b border-outline-variant/10 hover:bg-surface-variant/20 transition-colors cursor-pointer bg-surface-variant/10 relative">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full"></div>
+<div class="flex justify-between items-start mb-1">
+<div class="flex items-center gap-2">
+<span class="font-headline-md text-headline-md text-on-surface">G-482910</span>
+<span class="px-2 py-0.5 rounded text-[10px] font-label-md bg-secondary-container/30 text-secondary border border-secondary-container">Device-A</span>
+</div>
+<span class="font-body-md text-body-md text-outline text-xs">10:42 AM</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2">Your Google verification code is 482910. Don't share this code with anyone.</p>
+</div>
+<!-- Message Item 2 -->
+<div class="p-md md:p-lg border-b border-outline-variant/10 hover:bg-surface-variant/20 transition-colors cursor-pointer">
+<div class="flex justify-between items-start mb-1">
+<div class="flex items-center gap-2">
+<span class="font-headline-md text-headline-md text-on-surface">Bank of America</span>
+<span class="px-2 py-0.5 rounded text-[10px] font-label-md bg-secondary-container/30 text-secondary border border-secondary-container">Device-B</span>
+</div>
+<span class="font-body-md text-body-md text-outline text-xs">Yesterday</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2">Bank of America alert: A purchase of $42.50 was made on card ending in 4092 at STARBUCKS. Reply N if unrecognized.</p>
+</div>
+<!-- Message Item 3 -->
+<div class="p-md md:p-lg border-b border-outline-variant/10 hover:bg-surface-variant/20 transition-colors cursor-pointer">
+<div class="flex justify-between items-start mb-1">
+<div class="flex items-center gap-2">
+<span class="font-headline-md text-headline-md text-on-surface">+1 (555) 019-2834</span>
+<span class="px-2 py-0.5 rounded text-[10px] font-label-md bg-secondary-container/30 text-secondary border border-secondary-container">Device-A</span>
+</div>
+<span class="font-body-md text-body-md text-outline text-xs">Oct 24</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant line-clamp-2">Hey, are we still on for the server migration tonight? Need to confirm the downtime window before I notify the client.</p>
+</div>
+</div>
+<!-- Side Panel (Mockup - Hidden on Mobile, Visible on Desktop for active item) -->
+<div class="hidden md:flex flex-col w-[400px] bg-surface border-l border-outline-variant/10 overflow-y-auto">
+<!-- Panel Header -->
+<div class="px-lg py-md border-b border-outline-variant/10 flex justify-between items-center bg-surface-container/30 sticky top-0 z-10 backdrop-blur-sm">
+<h3 class="font-headline-md text-headline-md text-on-surface">Message Details</h3>
+<div class="flex gap-2">
+<button class="p-2 rounded hover:bg-surface-variant/50 text-on-surface-variant transition-colors" title="Forward">
+<span class="material-symbols-outlined text-sm" data-icon="forward">forward</span>
+</button>
+<button class="p-2 rounded hover:bg-error-container/50 text-error transition-colors" title="Delete">
+<span class="material-symbols-outlined text-sm" data-icon="delete">delete</span>
+</button>
+</div>
+</div>
+<div class="p-lg flex-1">
+<!-- Sender Info -->
+<div class="mb-lg">
+<p class="font-label-md text-label-md text-outline mb-1">Sender</p>
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded bg-primary-container text-on-primary-container flex items-center justify-center font-display font-bold">G</div>
+<div>
+<p class="font-headline-md text-headline-md text-on-surface">G-482910</p>
+<p class="font-body-md text-body-md text-outline text-xs">Oct 25, 2023 - 10:42:15 AM UTC</p>
+</div>
+</div>
+</div>
+<!-- Content -->
+<div class="mb-lg">
+<p class="font-label-md text-label-md text-outline mb-2">Message Body</p>
+<div class="bg-surface-container rounded-lg p-4 border border-outline-variant/20">
+<p class="font-body-md text-body-md text-on-surface leading-relaxed">Your Google verification code is 482910. Don't share this code with anyone.</p>
+</div>
+</div>
+<!-- Metadata -->
+<div class="mb-lg">
+<p class="font-label-md text-label-md text-outline mb-2">Metadata</p>
+<div class="bg-surface-container rounded-lg border border-outline-variant/20 overflow-hidden">
+<div class="grid grid-cols-2 gap-px bg-outline-variant/20">
+<div class="bg-surface p-3">
+<p class="font-label-md text-label-md text-outline text-xs mb-1">Device</p>
+<p class="font-body-md text-body-md text-on-surface text-sm">Device-A (ttyUSB0)</p>
+</div>
+<div class="bg-surface p-3">
+<p class="font-label-md text-label-md text-outline text-xs mb-1">SMS ID</p>
+<p class="font-code-sm text-code-sm text-on-surface text-sm">msg_8f92a1b</p>
+</div>
+<div class="bg-surface p-3">
+<p class="font-label-md text-label-md text-outline text-xs mb-1">Status</p>
+<div class="flex items-center gap-1.5">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span>
+<p class="font-body-md text-body-md text-on-surface text-sm">Received</p>
+</div>
+</div>
+<div class="bg-surface p-3">
+<p class="font-label-md text-label-md text-outline text-xs mb-1">Service Center</p>
+<p class="font-code-sm text-code-sm text-on-surface text-sm">+12063120000</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Raw JSON Payload -->
+<div>
+<p class="font-label-md text-label-md text-outline mb-2">Raw Payload</p>
+<div class="bg-[#09090b] rounded-lg p-4 border border-outline-variant/20 overflow-x-auto">
+<pre class="font-code-sm text-code-sm text-secondary-fixed-dim m-0"><code>{
+  "id": "msg_8f92a1b",
+  "direction": "inbound",
+  "sender": "G-482910",
+  "content": "Your Google verification code is 482910. Don't share this code with anyone.",
+  "timestamp": "2023-10-25T10:42:15Z",
+  "device_id": "dev_a19f2",
+  "port": "/dev/ttyUSB0",
+  "smsc": "+12063120000",
+  "encoding": "GSM-7"
+}</code></pre>
+</div>
+</div>
+</div>
+<!-- Quick Reply (Read Only style) -->
+<div class="p-md border-t border-outline-variant/10 bg-surface-container/50">
+<div class="relative">
+<input class="w-full bg-surface border-outline-variant/30 border rounded-lg pl-4 pr-10 py-2.5 font-body-md text-body-md text-on-surface-variant cursor-not-allowed opacity-60" disabled="" placeholder="Quick reply not supported for shortcodes..." type="text"/>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-outline-variant opacity-60" data-icon="send">send</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Nav Bar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 w-full z-50 rounded-t-xl bg-surface-container-highest/90 dark:bg-surface-container-lowest/90 backdrop-blur-xl border-t border-outline-variant/10 shadow-[0_-4px_12px_rgba(0,0,0,0.1)] flex justify-around items-center h-16 pb-safe transition-transform duration-200 active:scale-90">
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-variant/30 p-2 rounded-lg w-16" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="home">home</span>
+<span class="font-label-md text-label-md text-[10px]">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary font-bold active:bg-surface-variant/30 p-2 rounded-lg w-16" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="chat" data-weight="fill" style="font-variation-settings: 'FILL' 1;">chat</span>
+<span class="font-label-md text-label-md text-[10px]">Chat</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-variant/30 p-2 rounded-lg w-16" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="router">router</span>
+<span class="font-label-md text-label-md text-[10px]">Devices</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-variant/30 p-2 rounded-lg w-16" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="key">key</span>
+<span class="font-label-md text-label-md text-[10px]">Keys</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant active:bg-surface-variant/30 p-2 rounded-lg w-16" href="#">
+<span class="material-symbols-outlined mb-1" data-icon="more_horiz">more_horiz</span>
+<span class="font-label-md text-label-md text-[10px]">More</span>
+</a>
+</nav>
+<style>
+        /* Utility to hide scrollbar for horizontal scrolling filter bar */
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* Safe area padding for mobile bottom nav */
+        @supports (padding-bottom: env(safe-area-inset-bottom)) {
+            .pb-safe {
+                padding-bottom: env(safe-area-inset-bottom);
+            }
+        }
+    </style>
+</body></html>

@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Tsunagi - Events Stream</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Config -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-fixed-variant": "#39485a",
+                        "on-surface": "#e5e1e4",
+                        "surface-container-high": "#2a2a2c",
+                        "tertiary": "#4edea3",
+                        "surface": "#131315",
+                        "on-secondary-fixed": "#0d1c2d",
+                        "on-tertiary-fixed-variant": "#005236",
+                        "on-tertiary-container": "#000703",
+                        "on-surface-variant": "#c7c4d7",
+                        "on-primary-fixed": "#07006c",
+                        "outline": "#908fa0",
+                        "inverse-primary": "#494bd6",
+                        "surface-container-low": "#1c1b1d",
+                        "secondary-fixed-dim": "#b9c8de",
+                        "surface-container-lowest": "#0e0e10",
+                        "on-error-container": "#ffdad6",
+                        "tertiary-fixed": "#6ffbbe",
+                        "secondary-container": "#39485a",
+                        "background": "#131315",
+                        "outline-variant": "#464554",
+                        "secondary": "#b9c8de",
+                        "surface-container-highest": "#353437",
+                        "on-secondary": "#233143",
+                        "primary": "#c0c1ff",
+                        "on-secondary-container": "#a7b6cc",
+                        "surface-tint": "#c0c1ff",
+                        "inverse-surface": "#e5e1e4",
+                        "tertiary-container": "#00885d",
+                        "surface-variant": "#353437",
+                        "primary-container": "#8083ff",
+                        "on-tertiary-fixed": "#002113",
+                        "primary-fixed-dim": "#c0c1ff",
+                        "error-container": "#93000a",
+                        "error": "#ffb4ab",
+                        "on-tertiary": "#003824",
+                        "on-error": "#690005",
+                        "on-primary-fixed-variant": "#2f2ebe",
+                        "inverse-on-surface": "#313032",
+                        "secondary-fixed": "#d4e4fa",
+                        "on-background": "#e5e1e4",
+                        "on-primary-container": "#0d0096",
+                        "surface-dim": "#131315",
+                        "surface-container": "#201f22",
+                        "surface-bright": "#39393b",
+                        "primary-fixed": "#e1e0ff",
+                        "tertiary-fixed-dim": "#4edea3",
+                        "on-primary": "#1000a9"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "margin-safe": "32px",
+                        "sm": "8px",
+                        "md": "16px",
+                        "xl": "40px",
+                        "unit": "4px",
+                        "xs": "4px",
+                        "lg": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Geist"],
+                        "label-md": ["Geist"],
+                        "code-sm": ["JetBrains Mono"],
+                        "display": ["Geist"],
+                        "headline-lg": ["Geist"],
+                        "headline-lg-mobile": ["Geist"],
+                        "body-lg": ["Inter"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "fontWeight": "500" }],
+                        "code-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "display": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .pulse-live {
+            animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .3; }
+        }
+        
+        /* Custom Scrollbar for Terminal */
+        .terminal-scroll::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .terminal-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .terminal-scroll::-webkit-scrollbar-thumb {
+            background-color: theme('colors.surface-variant');
+            border-radius: 4px;
+        }
+        .terminal-scroll::-webkit-scrollbar-thumb:hover {
+            background-color: theme('colors.outline-variant');
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md h-screen overflow-hidden flex selection:bg-primary/30">
+<!-- SideNavBar (from JSON) -->
+<nav class="hidden md:flex bg-surface dark:bg-surface fixed left-0 top-0 h-screen w-[260px] bg-surface-container-low dark:bg-surface-container-low backdrop-blur-[20px] border-r border-outline-variant/10 z-20 flex-col py-lg px-md">
+<!-- Header -->
+<div class="flex items-center gap-3 mb-xl px-sm">
+<div class="w-8 h-8 rounded-md bg-primary-container/20 flex items-center justify-center border border-primary/20">
+<span class="material-symbols-outlined text-primary text-[18px]">hub</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary">Tsunagi</h1>
+<p class="font-label-md text-[11px] text-on-surface-variant uppercase tracking-wider">SMS Synchronization</p>
+</div>
+</div>
+<!-- Navigation Tabs -->
+<div class="flex flex-col gap-1 flex-1">
+<!-- Dashboard -->
+<a class="flex items-center gap-3 px-sm py-2 rounded-lg text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<!-- Messages -->
+<a class="flex items-center gap-3 px-sm py-2 rounded-lg text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">sms</span>
+<span class="font-label-md text-label-md">Messages</span>
+</a>
+<!-- Devices -->
+<a class="flex items-center gap-3 px-sm py-2 rounded-lg text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">devices</span>
+<span class="font-label-md text-label-md">Devices</span>
+</a>
+<!-- API Keys -->
+<a class="flex items-center gap-3 px-sm py-2 rounded-lg text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">vpn_key</span>
+<span class="font-label-md text-label-md">API Keys</span>
+</a>
+<!-- Events (ACTIVE) -->
+<a class="flex items-center gap-3 px-sm py-2 rounded-lg text-primary dark:text-primary bg-primary-container/10 border-r-2 border-primary active:scale-[0.98] transition-transform" href="#">
+<span class="material-symbols-outlined text-[20px]">event_note</span>
+<span class="font-label-md text-label-md">Events</span>
+</a>
+<!-- Settings -->
+<a class="flex items-center gap-3 px-sm py-2 rounded-lg text-on-surface-variant dark:text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-high transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</a>
+</div>
+<!-- CTA -->
+<div class="mt-auto pt-md">
+<button class="w-full flex items-center justify-center gap-2 bg-surface-container border border-outline-variant/30 hover:border-primary/50 text-on-surface py-2 px-4 rounded-lg font-label-md text-label-md transition-all">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                New API Key
+            </button>
+</div>
+</nav>
+<!-- Main Content Wrapper -->
+<div class="flex-1 flex flex-col md:ml-[260px] h-screen w-full relative">
+<!-- TopNavBar (from JSON) -->
+<header class="bg-surface/80 dark:bg-surface/80 backdrop-blur-[20px] border-b border-outline-variant/10 h-16 w-full z-10 flex justify-between items-center px-lg shrink-0">
+<!-- Left: Search -->
+<div class="flex-1 max-w-md">
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]">search</span>
+<input class="w-full bg-surface-container-low border border-outline-variant/30 rounded-md py-1.5 pl-10 pr-4 text-on-surface font-label-md text-label-md focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all placeholder:text-on-surface-variant/50 outline-none" placeholder="Search events, device IDs, or payloads..." type="text"/>
+</div>
+</div>
+<!-- Right: Actions -->
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-on-surface hover:bg-surface-container p-2 rounded-full transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-on-surface hover:bg-surface-container p-2 rounded-full transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">help_outline</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-surface-container-high border border-outline-variant/20 overflow-hidden shrink-0 ml-2">
+<img class="w-full h-full object-cover" data-alt="A macro shot of a sleek, minimalist dark metallic sphere reflecting a subtle indigo light, representing a user profile avatar." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDVZkKP2Bh9A1prvXZ5Sdd_FWFRMoVmbV5s42tc4X14va9i95uRrh2p_LJXCE7H_DvU_X2uVX6ouCVJ0PeX6IhzqUd2RZ_hYHbUzi319RT8IDJxWfPt5y5Pyh_z_XpiB5FbVAPj2oG5U22lHJf4jSKiNN7Z3_wGg5OS7OGFJDF1-z0J4SiGsdAuIfUDgSCjoyfrfeKi9lc0mGVNJ7wJwRnTDml5R1TqQAbLJqkEdUmw4PtHkXtBBI0HvQ"/>
+</div>
+</div>
+</header>
+<!-- Main Canvas: Events Stream -->
+<main class="flex-1 flex flex-col p-md gap-4 h-[calc(100vh-64px)] overflow-hidden">
+<!-- Toolbar -->
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-surface-container-low border border-outline-variant/10 rounded-xl p-3 shrink-0">
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-2 px-2">
+<div class="w-2 h-2 rounded-full bg-tertiary pulse-live"></div>
+<h2 class="font-headline-md text-label-md text-on-surface">Live Stream</h2>
+</div>
+<div class="h-4 w-px bg-outline-variant/30 hidden sm:block"></div>
+<div class="text-on-surface-variant font-code-sm text-code-sm opacity-70">
+                        Showing last 1000 events
+                    </div>
+</div>
+<div class="flex items-center gap-2 w-full sm:w-auto">
+<!-- Filter Dropdown Mock -->
+<button class="flex items-center gap-2 px-3 py-1.5 bg-surface rounded-md border border-outline-variant/20 hover:border-outline-variant/50 text-on-surface-variant text-label-md font-label-md transition-colors">
+<span class="material-symbols-outlined text-[16px]">filter_list</span>
+                        All Levels
+                        <span class="material-symbols-outlined text-[16px]">expand_more</span>
+</button>
+<div class="h-4 w-px bg-outline-variant/30 hidden sm:block mx-1"></div>
+<!-- Actions -->
+<button class="flex items-center gap-2 px-3 py-1.5 bg-transparent hover:bg-surface rounded-md text-on-surface-variant hover:text-on-surface transition-colors font-label-md text-label-md">
+<span class="material-symbols-outlined text-[16px]">pause</span>
+                        Pause
+                    </button>
+<button class="flex items-center gap-2 px-3 py-1.5 bg-transparent hover:bg-error-container/10 rounded-md text-on-surface-variant hover:text-error transition-colors font-label-md text-label-md">
+<span class="material-symbols-outlined text-[16px]">delete_sweep</span>
+                        Clear
+                    </button>
+</div>
+</div>
+<!-- Terminal Log View -->
+<div class="flex-1 bg-surface-container-lowest border border-outline-variant/20 rounded-xl overflow-hidden flex flex-col relative shadow-[inset_0_2px_10px_rgba(0,0,0,0.2)]">
+<!-- Table Header -->
+<div class="grid grid-cols-12 gap-4 px-4 py-3 border-b border-outline-variant/10 bg-surface-container/50 font-label-md text-label-md text-on-surface-variant shrink-0">
+<div class="col-span-2">Timestamp</div>
+<div class="col-span-2">Event Type</div>
+<div class="col-span-8">Payload / Description</div>
+</div>
+<!-- Log Rows Container (Scrollable) -->
+<div class="flex-1 overflow-y-auto terminal-scroll p-2 font-code-sm text-code-sm flex flex-col gap-0.5">
+<!-- Row: System Init -->
+<div class="grid grid-cols-12 gap-4 px-2 py-1.5 rounded hover:bg-surface-container/30 border border-transparent hover:border-outline-variant/5 transition-colors group">
+<div class="col-span-2 text-on-surface-variant/70 opacity-80 group-hover:opacity-100 transition-opacity">14:32:01.442</div>
+<div class="col-span-2 text-primary">SYSTEM_INIT</div>
+<div class="col-span-8 text-on-surface/90 truncate">Initializing listener on port 8080. Daemon v2.4.1 started successfully.</div>
+</div>
+<!-- Row: Msg Recv -->
+<div class="grid grid-cols-12 gap-4 px-2 py-1.5 rounded hover:bg-surface-container/30 border border-transparent hover:border-outline-variant/5 transition-colors group">
+<div class="col-span-2 text-on-surface-variant/70 opacity-80 group-hover:opacity-100 transition-opacity">14:32:05.119</div>
+<div class="col-span-2 text-tertiary">MSG_RECV</div>
+<div class="col-span-8 text-on-surface/90 truncate">{"id":"evt_9x8", "device":"DEV-001", "status":"delivered", "len":42}</div>
+</div>
+<!-- Row: Info -->
+<div class="grid grid-cols-12 gap-4 px-2 py-1.5 rounded hover:bg-surface-container/30 border border-transparent hover:border-outline-variant/5 transition-colors group">
+<div class="col-span-2 text-on-surface-variant/70 opacity-80 group-hover:opacity-100 transition-opacity">14:32:12.880</div>
+<div class="col-span-2 text-secondary">SYNC_OK</div>
+<div class="col-span-8 text-on-surface/90 truncate">Batch sync completed for DEV-001. 1 message processed.</div>
+</div>
+<!-- Row: Auth Fail -->
+<div class="grid grid-cols-12 gap-4 px-2 py-1.5 rounded hover:bg-error/5 hover:bg-surface-container/30 border border-transparent hover:border-error/10 transition-colors group">
+<div class="col-span-2 text-on-surface-variant/70 opacity-80 group-hover:opacity-100 transition-opacity">14:35:44.201</div>
+<div class="col-span-2 text-error">AUTH_FAIL</div>
+<div class="col-span-8 text-error/90 truncate">Invalid API Key format. Request rejected from IP 192.168.1.105</div>
+</div>
+<!-- Row: Msg Recv -->
+<div class="grid grid-cols-12 gap-4 px-2 py-1.5 rounded hover:bg-surface-container/30 border border-transparent hover:border-outline-variant/5 transition-colors group">
+<div class="col-span-2 text-on-surface-variant/70 opacity-80 group-hover:opacity-100 transition-opacity">14:36:01.002</div>
+<div class="col-span-2 text-tertiary">MSG_RECV</div>
+<div class="col-span-8 text-on-surface/90 truncate">{"id":"evt_9x9", "device":"DEV-002", "status":"pending", "len":128}</div>
+</div>
+<!-- Row: Warning -->
+<div class="grid grid-cols-12 gap-4 px-2 py-1.5 rounded hover:bg-surface-container/30 border border-transparent hover:border-outline-variant/5 transition-colors group">
+<div class="col-span-2 text-on-surface-variant/70 opacity-80 group-hover:opacity-100 transition-opacity">14:36:15.555</div>
+<div class="col-span-2 text-[#fbbf24]">LATENCY_WARN</div>
+<div class="col-span-8 text-on-surface/90 truncate">Upstream carrier responding slowly (&gt;2000ms). Monitoring health.</div>
+</div>
+<!-- Row: Msg Recv -->
+<div class="grid grid-cols-12 gap-4 px-2 py-1.5 rounded hover:bg-surface-container/30 border border-transparent hover:border-outline-variant/5 transition-colors group">
+<div class="col-span-2 text-on-surface-variant/70 opacity-80 group-hover:opacity-100 transition-opacity">14:37:22.110</div>
+<div class="col-span-2 text-tertiary">MSG_RECV</div>
+<div class="col-span-8 text-on-surface/90 truncate">{"id":"evt_9y0", "device":"DEV-001", "status":"delivered", "len":12}</div>
+</div>
+</div>
+<!-- Bottom Fade/Shadow for Terminal depth -->
+<div class="absolute bottom-0 left-0 w-full h-8 bg-gradient-to-t from-surface-container-lowest to-transparent pointer-events-none"></div>
+</div>
+</main>
+</div>
+</body></html>

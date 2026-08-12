@@ -1,0 +1,51 @@
+# TLS overlay. Use alongside the base file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+#
+# See TLS.md for the one-time certificate issuance step.
+
+services:
+  api:
+    environment:
+      TSUNAGI_CORS_ORIGINS: https://${TSUNAGI_DOMAIN:?set TSUNAGI_DOMAIN in deployment/.env}
+
+  nginx:
+    # !override replaces the base list instead of appending to it. Without it
+    # Compose would keep publishing HTTP_PORT in plaintext next to 443.
+    ports: !override
+      - "80:80"
+      - "443:443"
+    environment:
+      TSUNAGI_DOMAIN: ${TSUNAGI_DOMAIN}
+    volumes:
+      # Mounted as a template so nginx's entrypoint substitutes TSUNAGI_DOMAIN.
+      - ./nginx/tsunagi-tls.conf:/etc/nginx/templates/default.conf.template:ro
+      - certbot-conf:/etc/letsencrypt:ro
+      - certbot-webroot:/var/www/certbot:ro
+    # nginx reads certificates once at startup, so a renewal is invisible until
+    # it reloads. Reloading on a timer here avoids giving the certbot container
+    # a socket into this one.
+    command: >
+      sh -c "while :; do sleep 6h; nginx -s reload; done &
+      nginx -g 'daemon off;'"
+
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - certbot-conf:/etc/letsencrypt
+      - certbot-webroot:/var/www/certbot
+    # Twice a day, renewing anything inside its 30-day window. certbot exits 0
+    # when nothing is due, so this is a no-op most days.
+    entrypoint: >
+      sh -c "trap exit TERM;
+      while :; do
+        certbot renew --webroot -w /var/www/certbot --quiet;
+        sleep 12h;
+      done"
+    depends_on:
+      - nginx
+    restart: unless-stopped
+
+volumes:
+  certbot-conf:
+  certbot-webroot:

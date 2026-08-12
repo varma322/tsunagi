@@ -1,0 +1,56 @@
+[Unit]
+Description=Tsunagi API
+Documentation=https://github.com/you/tsunagi
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=exec
+User=tsunagi
+Group=tsunagi
+WorkingDirectory=/opt/tsunagi/backend
+EnvironmentFile=/etc/tsunagi/tsunagi.env
+
+# Migrations own the schema; the app's create_all path is development only.
+ExecStartPre=/opt/tsunagi/backend/.venv/bin/alembic upgrade head
+
+# Uvicorn directly rather than gunicorn: this is an ASGI app, so gunicorn would
+# only be a process manager wrapping uvicorn workers anyway. See BAREMETAL.md
+# if you want the gunicorn form.
+#
+# --workers > 1 requires TSUNAGI_REDIS_URL. Without it the event bus and rate
+# limiter are per-process, so a WebSocket client on one worker never sees
+# messages ingested by another.
+ExecStart=/opt/tsunagi/backend/.venv/bin/uvicorn app.main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --workers 1 \
+    --proxy-headers \
+    --forwarded-allow-ips='127.0.0.1'
+
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+# Hardening. The service needs nothing outside its own directory.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/tsunagi/backend
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tsunagi-api
+
+[Install]
+WantedBy=multi-user.target

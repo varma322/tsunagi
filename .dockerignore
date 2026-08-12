@@ -1,0 +1,35 @@
+# The API image builds from the repository root so it can ship scripts/.
+# Everything unrelated to the backend is excluded to keep the context small.
+
+.git/
+.gradle/
+.idea/
+.kotlin/
+
+# Android application
+app/
+gradle/
+gradlew
+gradlew.bat
+*.gradle.kts
+gradle.properties
+local.properties
+
+# Dashboard (built by its own image from frontend/)
+frontend/node_modules/
+frontend/dist/
+
+# Design mockups
+tmp/
+
+# Python
+**/__pycache__/
+**/*.pyc
+backend/.venv/
+backend/*.db
+backend/.pytest_cache/
+backend/tests/
+
+# Secrets must never enter an image layer
+**/.env
+deployment/

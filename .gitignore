@@ -1,0 +1,36 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Backend
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+# Databases and their backups. The suffix glob matters: a file named
+# tsunagi.db.bak-<date> is not matched by *.db and would otherwise be committed
+# with real message contents in it.
+backend/*.db
+backend/*.db-*
+backend/*.db.*
+backend/.env
+backend/.pytest_cache/
+
+# Deployment secrets
+deployment/.env
+
+# Android release signing — never commit these
+keystore.properties
+*.jks
+*.keystore
