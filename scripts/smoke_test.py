@@ -5,19 +5,67 @@ Walks the same path the Android app takes -- register a device, upload a batch,
 read it back -- so a deployment can be verified without a phone.
 
     python scripts/smoke_test.py --url http://127.0.0.1:8000 --api-key <admin key>
+
+Deliberately uses only the standard library: this runs on freshly provisioned
+servers where the virtualenv holds production dependencies and nothing else.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 import uuid
 from datetime import UTC, datetime, timedelta
 
-import httpx
-
 PASS = "PASS"
 FAIL = "FAIL"
+
+# Identify the tool explicitly. urllib's default User-Agent is "Python-urllib/x.y",
+# which Cloudflare's browser-integrity check rejects outright with error 1010 —
+# so against a proxied domain every request would 403 before reaching the server.
+USER_AGENT = "Tsunagi-SmokeTest/1.0.0"
+
+
+def request(
+    method: str,
+    url: str,
+    headers: dict[str, str] | None = None,
+    payload: object | None = None,
+    timeout: float = 20.0,
+) -> tuple[int, object]:
+    """Returns (status, parsed body). Status 0 means the server was unreachable."""
+    body = json.dumps(payload).encode() if payload is not None else None
+    req = urllib.request.Request(url, data=body, method=method)
+    req.add_header("Content-Type", "application/json")
+    req.add_header("User-Agent", USER_AGENT)
+    for key, value in (headers or {}).items():
+        req.add_header(key, value)
+
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            raw = response.read().decode("utf-8")
+            return response.status, (json.loads(raw) if raw else None)
+    except urllib.error.HTTPError as error:
+        raw = error.read().decode("utf-8", "replace")
+        try:
+            return error.code, (json.loads(raw) if raw else None)
+        except ValueError:
+            return error.code, raw
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        return 0, str(error)
+
+
+def query(base: str, path: str, params: dict[str, object] | None = None) -> str:
+    url = f"{base}{path}"
+    if params:
+        clean = {k: str(v) for k, v in params.items() if v is not None}
+        if clean:
+            url = f"{url}?{urllib.parse.urlencode(clean)}"
+    return url
 
 
 class Checks:
@@ -41,144 +89,134 @@ def main() -> int:
         help="Legacy TSUNAGI_SETUP_KEY. Omit it and the script issues a single-use "
         "enrolment code instead, which is the default enrolment path.",
     )
-    parser.add_argument("--timeout", type=float, default=15.0)
+    parser.add_argument("--timeout", type=float, default=20.0)
     args = parser.parse_args()
 
     base = args.url.rstrip("/")
     checks = Checks()
+    reader = {"Authorization": f"Bearer {args.api_key}"}
 
-    with httpx.Client(base_url=base, timeout=args.timeout) as client:
-        health = client.get("/health")
-        checks.record("health", health.status_code == 200, f"HTTP {health.status_code}")
-        if health.status_code != 200:
-            print("\nServer is not reachable; aborting.")
+    status, body = request("GET", f"{base}/health", timeout=args.timeout)
+    checks.record("health", status == 200, f"HTTP {status}" if status else str(body))
+    if status != 200:
+        print("\nServer is not reachable; aborting.")
+        return 1
+
+    # --- enrolment --------------------------------------------------------
+    if args.setup_key:
+        credential, enrolment_id = args.setup_key, None
+    else:
+        status, body = request(
+            "POST", f"{base}/api/v1/enrolments", reader, {"label": "smoke-test"}
+        )
+        checks.record("issue enrolment code", status == 201, f"HTTP {status}")
+        if status != 201:
+            print("\nAn admin API key is required to issue enrolment codes.")
             return 1
+        credential, enrolment_id = body["code"], body["id"]
 
-        reader = {"Authorization": f"Bearer {args.api_key}"}
+    device_auth = {"Authorization": f"Bearer {credential}"}
+    status, device = request(
+        "POST",
+        f"{base}/api/v1/devices/register",
+        device_auth,
+        {"device_name": f"smoke-test-{uuid.uuid4().hex[:6]}"},
+    )
+    checks.record("register device", status == 201, f"HTTP {status}")
+    if status != 201:
+        return 1
 
-        if args.setup_key:
-            enrolment_credential = args.setup_key
-            enrolment_id = None
-        else:
-            issued = client.post(
-                "/api/v1/enrolments", headers=reader, json={"label": "smoke-test"}
-            )
-            checks.record(
-                "issue enrolment code", issued.status_code == 201, f"HTTP {issued.status_code}"
-            )
-            if issued.status_code != 201:
-                print("\nAn admin API key is required to issue enrolment codes.")
-                return 1
-            enrolment_credential = issued.json()["code"]
-            enrolment_id = issued.json()["id"]
+    checks.record("device token format", str(device["token"]).startswith("tsn_dev_"))
 
-        registration = client.post(
-            "/api/v1/devices/register",
-            headers={"Authorization": f"Bearer {enrolment_credential}"},
-            json={"device_name": f"smoke-test-{uuid.uuid4().hex[:6]}"},
+    if enrolment_id is not None:
+        status, _ = request(
+            "POST",
+            f"{base}/api/v1/devices/register",
+            device_auth,
+            {"device_name": "should-not-exist"},
         )
-        checks.record(
-            "register device",
-            registration.status_code == 201,
-            f"HTTP {registration.status_code}",
-        )
-        if registration.status_code != 201:
-            return 1
+        checks.record("enrolment code cannot be reused", status == 403, f"HTTP {status}")
 
-        if enrolment_id is not None:
-            replay = client.post(
-                "/api/v1/devices/register",
-                headers={"Authorization": f"Bearer {enrolment_credential}"},
-                json={"device_name": "should-not-exist"},
-            )
-            checks.record(
-                "enrolment code cannot be reused",
-                replay.status_code == 403,
-                f"HTTP {replay.status_code}",
-            )
+    device_headers = {"Authorization": f"Bearer {device['token']}"}
 
-        device = registration.json()
-        device_headers = {"Authorization": f"Bearer {device['token']}"}
-        checks.record("device token format", device["token"].startswith("tsn_dev_"))
+    # --- ingestion --------------------------------------------------------
+    needle = f"smoke-{uuid.uuid4().hex[:10]}"
+    sent_at = (datetime.now(UTC) - timedelta(seconds=5)).isoformat()
+    messages = [
+        {
+            "id": str(uuid.uuid4()),
+            "sender": "+15550001111",
+            "body": f"verification {needle}",
+            "received_at": sent_at,
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "sender": "+15550002222",
+            "body": "second message",
+            "received_at": sent_at,
+        },
+    ]
 
-        needle = f"smoke-{uuid.uuid4().hex[:10]}"
-        sent_at = datetime.now(UTC) - timedelta(seconds=5)
-        payload = [
-            {
-                "id": str(uuid.uuid4()),
-                "sender": "+15550001111",
-                "body": f"verification {needle}",
-                "received_at": sent_at.isoformat(),
-            },
-            {
-                "id": str(uuid.uuid4()),
-                "sender": "+15550002222",
-                "body": "second message",
-                "received_at": sent_at.isoformat(),
-            },
-        ]
+    status, body = request(
+        "POST", f"{base}/api/v1/messages/batch", device_headers, {"messages": messages}
+    )
+    checks.record("batch upload", status == 200, f"HTTP {status}")
+    if status == 200:
+        checks.record("batch created both messages", body.get("created") == 2, str(body))
 
-        batch = client.post(
-            "/api/v1/messages/batch", headers=device_headers, json={"messages": payload}
-        )
-        checks.record("batch upload", batch.status_code == 200, f"HTTP {batch.status_code}")
-        if batch.status_code == 200:
-            body = batch.json()
-            checks.record("batch created both messages", body.get("created") == 2, str(body))
+    status, body = request(
+        "POST", f"{base}/api/v1/messages/batch", device_headers, {"messages": messages}
+    )
+    checks.record(
+        "replayed batch is deduplicated",
+        status == 200 and body.get("duplicates") == 2,
+        str(body if status == 200 else status),
+    )
 
-        replay = client.post(
-            "/api/v1/messages/batch", headers=device_headers, json={"messages": payload}
-        )
-        checks.record(
-            "replayed batch is deduplicated",
-            replay.status_code == 200 and replay.json().get("duplicates") == 2,
-            str(replay.json() if replay.status_code == 200 else replay.status_code),
-        )
+    # --- reading ----------------------------------------------------------
+    status, body = request(
+        "GET", query(base, "/api/v1/messages", {"device_id": device["device_id"]}), reader
+    )
+    checks.record(
+        "list messages for device",
+        status == 200 and body.get("total") == 2,
+        f"HTTP {status}",
+    )
 
-        listing = client.get(
-            "/api/v1/messages", headers=reader, params={"device_id": device["device_id"]}
-        )
-        checks.record(
-            "list messages for device",
-            listing.status_code == 200 and listing.json().get("total") == 2,
-            f"HTTP {listing.status_code}",
-        )
+    status, body = request("GET", query(base, "/api/v1/messages/search", {"query": needle}), reader)
+    checks.record(
+        "search finds uploaded message",
+        status == 200 and body.get("total") == 1,
+        f"HTTP {status}",
+    )
 
-        search = client.get("/api/v1/messages/search", headers=reader, params={"query": needle})
-        checks.record(
-            "search finds uploaded message",
-            search.status_code == 200 and search.json().get("total") == 1,
-            f"HTTP {search.status_code}",
-        )
+    status, body = request("GET", f"{base}/api/v1/devices", reader)
+    online = False
+    if status == 200:
+        entry = next((d for d in body["devices"] if d["id"] == device["device_id"]), None)
+        online = bool(entry and entry["status"])
+    checks.record("device reports online", online, f"HTTP {status}")
 
-        devices = client.get("/api/v1/devices", headers=reader)
-        online = False
-        if devices.status_code == 200:
-            entry = next(
-                (d for d in devices.json()["devices"] if d["id"] == device["device_id"]), None
-            )
-            online = bool(entry and entry["status"])
-        checks.record("device reports online", online, f"HTTP {devices.status_code}")
+    status, body = request("GET", query(base, "/api/v1/events", {"type": "MSG_RECV"}), reader)
+    checks.record(
+        "events recorded ingestion",
+        status == 200 and len(body["events"]) >= 2,
+        f"HTTP {status}",
+    )
 
-        events = client.get("/api/v1/events", headers=reader, params={"type": "MSG_RECV"})
-        checks.record(
-            "events recorded ingestion",
-            events.status_code == 200 and len(events.json()["events"]) >= 2,
-            f"HTTP {events.status_code}",
-        )
+    status, body = request("GET", f"{base}/api/v1/stats", reader)
+    checks.record(
+        "stats reachable",
+        status == 200 and body.get("messages_total", 0) >= 2,
+        f"HTTP {status}",
+    )
 
-        stats = client.get("/api/v1/stats", headers=reader)
-        checks.record(
-            "stats reachable",
-            stats.status_code == 200 and stats.json()["messages_total"] >= 2,
-            f"HTTP {stats.status_code}",
-        )
+    # --- authorization ----------------------------------------------------
+    status, _ = request("GET", f"{base}/api/v1/messages")
+    checks.record("unauthenticated read is rejected", status == 401, f"HTTP {status}")
 
-        unauthorized = client.get("/api/v1/messages")
-        checks.record("unauthenticated read is rejected", unauthorized.status_code == 401)
-
-        wrong_scope = client.get("/api/v1/messages", headers=device_headers)
-        checks.record("device token cannot read messages", wrong_scope.status_code == 403)
+    status, _ = request("GET", f"{base}/api/v1/messages", device_headers)
+    checks.record("device token cannot read messages", status == 403, f"HTTP {status}")
 
     print()
     if checks.failures:

@@ -264,7 +264,7 @@ else
 fi
 
 if [ -f "$INSTALL_DIR/scripts/smoke_test.py" ] && command -v python3 >/dev/null; then
-  python3 -m pip install --quiet httpx 2>/dev/null || true
+  # The smoke test is standard-library only, so no install step is needed.
   python3 "$INSTALL_DIR/scripts/smoke_test.py" \
       --url "http://127.0.0.1:${BIND_PORT}" --api-key "$ADMIN_KEY" || \
       warn "smoke test reported failures (see above)"
