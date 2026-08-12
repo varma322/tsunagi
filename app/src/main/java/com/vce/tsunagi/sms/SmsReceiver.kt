@@ -22,11 +22,33 @@ import kotlinx.coroutines.launch
 class SmsReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        // Logged before any filtering: if a message never reaches the app at
+        // all, the absence of this line is the evidence. Only metadata is
+        // recorded -- never message contents.
+        Log.i(TAG, "broadcast action=${intent.action}")
+
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
 
-        val parts = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
+        val parts = Telephony.Sms.Intents.getMessagesFromIntent(intent)
+        if (parts == null) {
+            Log.w(TAG, "broadcast carried no parsable PDUs")
+            return
+        }
+        Log.i(TAG, "received ${parts.size} PDU part(s)")
+        parts.forEachIndexed { index, part ->
+            Log.i(
+                TAG,
+                "  part $index from=${part.displayOriginatingAddress ?: part.originatingAddress} " +
+                    "bodyChars=${(part.displayMessageBody ?: part.messageBody)?.length ?: 0}",
+            )
+        }
+
         val captured = assemble(parts)
-        if (captured.isEmpty()) return
+        if (captured.isEmpty()) {
+            Log.w(TAG, "PDUs assembled into zero messages")
+            return
+        }
+        Log.i(TAG, "assembled ${captured.size} message(s)")
 
         val repository = TsunagiApplication.container(context).repository
         val pendingResult = goAsync()
@@ -40,8 +62,8 @@ class SmsReceiver : BroadcastReceiver() {
                         stored++
                     }
                 }
+                Log.i(TAG, "stored $stored of ${captured.size} message(s)")
                 if (stored > 0) {
-                    Log.i(TAG, "captured $stored message(s)")
                     SyncScheduler.syncNow(appContext)
                 }
             } catch (error: Exception) {
