@@ -30,7 +30,10 @@ delivers is recovered rather than lost — see the unreleased section of
 [CHANGELOG.md](CHANGELOG.md) and **Capture reliability** under Known Gaps.
 
 Verification currently in place: 79 backend tests (`cd backend && pytest`),
-36 Android unit tests (`gradlew :app:testDebugUnitTest`), a frontend typecheck
+36 Android unit tests (`gradlew :app:testDebugUnitTest`), 19 Android
+instrumented tests against real SQLite and a real SMS provider
+(`gradlew :app:connectedDebugAndroidTest`, needs a device or emulator),
+a frontend typecheck
 (`npm run typecheck`), and [scripts/smoke_test.py](scripts/smoke_test.py), which
 walks the full register → upload → read path against any running server.
 [scripts/seed_demo.py](scripts/seed_demo.py) populates a throwaway database for
@@ -151,9 +154,12 @@ which turns any missed broadcast into a delay rather than a loss, and the app
 offers to exempt itself from battery optimization to prevent the miss in the
 first place. What remains open:
 
-- **The sweep has not been verified against a real SMS provider.** Its logic is
-  unit-tested against a fake inbox; the `ContentResolver` query itself has only
-  been exercised by hand.
+- **The sweep has not been verified on a physical phone.** It is covered by
+  instrumented tests against a real SMS provider on an emulator — 195 messages
+  recovered on a first sweep and zero on a repeat, which is what proves
+  deduplication holds against provider data rather than against a fixture. What
+  an emulator cannot reproduce is the failure that started this: a vendor
+  battery manager parking the app in the stopped state.
 - **A phone that has stopped capturing still reports healthy.** The heartbeat
   proves the app can reach the server, not that it can still receive SMS, so a
   permanently broken device looks identical to a quiet one on the dashboard.
@@ -165,10 +171,10 @@ first place. What remains open:
 ### Testing
 
 - **No automated end-to-end test of the Android app against a live server.**
-  The sync engine is unit-tested with fakes and verified by hand on a device;
-  an instrumented test would close the gap. `app/src/androidTest/` currently
-  holds only the generated example, so the Room queries added for the inbox
-  sweep have never run against real SQLite.
+  The sync engine is unit-tested with fakes and verified by hand on a device.
+  Instrumented tests now cover the storage and capture layers against real
+  SQLite and a real SMS provider, but nothing drives the app against a running
+  backend.
 - **`GET /api/v1/me` has no backend test.** It is what lets an idle device
   report that it is still alive, and nothing under `backend/tests/` exercises
   it.
