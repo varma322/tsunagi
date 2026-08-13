@@ -1,12 +1,10 @@
 *.iml
 .gradle
 /local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+# The whole IDE directory, not the stock template's subset. The files the
+# template leaves in — deviceManager.xml, deploymentTargetSelector.xml — record
+# which emulator and phone one machine deploys to, which is not shareable.
+/.idea/
 .DS_Store
 /build
 /captures
