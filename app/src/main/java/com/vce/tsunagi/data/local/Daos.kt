@@ -34,13 +34,36 @@ interface DeviceDao {
 interface MessageDao {
     /**
      * Ignores an id that is already stored: the SMS broadcast can be delivered
-     * more than once for a single message.
+     * more than once for a single message, and the inbox sweep re-reads
+     * messages the broadcast already captured. Both resolve to the same
+     * derived id, so both land here and are dropped.
      */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(message: MessageEntity): Long
 
     @Query("SELECT * FROM messages WHERE id = :id")
     suspend fun find(id: String): MessageEntity?
+
+    /**
+     * Whether an equivalent message is already stored near this timestamp.
+     *
+     * The derived id is the primary defence against duplicates, but it only
+     * holds when both sightings agree on the timestamp. A broadcast reports the
+     * service centre's timestamp while the platform inbox may record when the
+     * message was written to the provider, so the sweep needs a second check
+     * that tolerates the two disagreeing by a few minutes.
+     */
+    @Query(
+        """
+        SELECT EXISTS(
+            SELECT 1 FROM messages
+            WHERE sender = :sender
+              AND body = :body
+              AND received_at BETWEEN :from AND :to
+        )
+        """
+    )
+    suspend fun existsNear(sender: String, body: String, from: Long, to: Long): Boolean
 
     @Query(
         """
@@ -77,6 +100,28 @@ interface MessageDao {
         """
     )
     suspend fun markFailed(ids: List<String>, error: String?)
+
+    /**
+     * Removes a permanently rejected message from the queue.
+     *
+     * Without this a message the server will never accept is re-selected by
+     * [pendingBatch] on every pass, and — because uploads go up in batches —
+     * takes every message behind it down too. Setting it aside is what keeps
+     * one bad message from stopping the queue for good.
+     */
+    @Query(
+        """
+        UPDATE messages
+        SET sync_status = 'QUARANTINED',
+            attempt_count = attempt_count + 1,
+            last_error = :error
+        WHERE id IN (:ids)
+        """
+    )
+    suspend fun quarantine(ids: List<String>, error: String?)
+
+    @Query("SELECT COUNT(*) FROM messages WHERE sync_status = 'QUARANTINED'")
+    suspend fun quarantinedCount(): Int
 
     /** Recovers rows stranded in UPLOADING by a process death mid-upload. */
     @Query("UPDATE messages SET sync_status = 'PENDING' WHERE sync_status = 'UPLOADING'")

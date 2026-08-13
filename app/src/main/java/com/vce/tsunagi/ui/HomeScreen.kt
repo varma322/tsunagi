@@ -30,6 +30,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,8 +46,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.vce.tsunagi.data.TsunagiSettings
 import com.vce.tsunagi.data.local.MessageEntity
+import com.vce.tsunagi.sync.BatteryOptimization
 import com.vce.tsunagi.ui.theme.TsunagiWarning
 import java.time.Instant
 import java.time.ZoneId
@@ -77,6 +82,20 @@ fun HomeScreen(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results -> permissionsGranted = results.values.all { it } }
 
+    // The exemption is granted on a system screen rather than through a result
+    // callback, so the only reliable moment to re-read it is on the way back.
+    var batteryExempt by remember { mutableStateOf(BatteryOptimization.isExempt(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                batteryExempt = BatteryOptimization.isExempt(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
@@ -87,6 +106,12 @@ fun HomeScreen(
         if (!permissionsGranted) {
             item {
                 PermissionCard(onGrant = { permissionLauncher.launch(smsPermissions) })
+            }
+        }
+
+        if (!batteryExempt) {
+            item {
+                BatteryCard(onExempt = { BatteryOptimization.requestExemption(context) })
             }
         }
 
@@ -147,6 +172,31 @@ private fun PermissionCard(onGrant: () -> Unit) {
 }
 
 @Composable
+private fun BatteryCard(onExempt: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        )
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = "Battery optimization is on",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = "Android may put Tsunagi to sleep, and a sleeping app is not told " +
+                    "about incoming SMS at all. Messages missed this way are picked up by " +
+                    "the next inbox check, but they arrive late. Turning optimization off " +
+                    "for Tsunagi keeps capture immediate.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(onClick = onExempt) { Text("Allow background activity") }
+        }
+    }
+}
+
+@Composable
 private fun StatusCard(state: HomeUiState, onSyncNow: () -> Unit, onForget: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(
@@ -201,6 +251,18 @@ private fun StatusCard(state: HomeUiState, onSyncNow: () -> Unit, onForget: () -
             state.settings.lastSyncError?.let { error ->
                 Text(
                     text = error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+
+            // Set aside rather than queued, so it would otherwise leave no
+            // trace: the counts above would look healthy while messages were
+            // quietly never delivered.
+            if (state.quarantined > 0) {
+                Text(
+                    text = "${state.quarantined} message(s) the server permanently refused. " +
+                        "They are stored on this phone but will not be uploaded.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )

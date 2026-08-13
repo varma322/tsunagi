@@ -108,6 +108,16 @@ saves, so `AppContainer` is constructed by hand and reachable from a bare
 - Persists to Room with `sync_status = PENDING` and enqueues a sync.
 - Does the database write inside `goAsync()`, since `onReceive` runs on the main
   thread with a short lifetime.
+- Reads the platform SMS inbox (`READ_SMS`) as a second, slower path. The
+  broadcast alone is not enough to be reliable: none is delivered while the app
+  sits in the stopped state — where a force-stop or a vendor battery manager can
+  park it, with no callback and nothing in the log to say so — and one can be
+  lost to process death between delivery and the write. Every sync pass sweeps
+  the inbox from a stored watermark and stores whatever is missing, so a missed
+  broadcast costs a delay rather than the message. The first sweep only looks
+  back a day, so installing the app does not upload the phone's whole history.
+- The app also offers to disable battery optimization for itself, which is what
+  prevents the miss rather than recovering from it.
 
 #### Local Storage (`data/local/`)
 
@@ -116,13 +126,18 @@ Room entities mirror the server model (see
 
 - `DeviceEntity` — this device's identity and server token.
 - `MessageEntity` — captured messages plus a `sync_status` state machine:
-  `PENDING → UPLOADING → SYNCED` (with `FAILED` re-queued for retry).
+  `PENDING → UPLOADING → SYNCED` (with `FAILED` re-queued for retry, and
+  `QUARANTINED` for a message the server refuses permanently).
 
 #### Sync Engine (`sync/`)
 
 - WorkManager job with a network-connected constraint.
 - Registers the device on first run, then uploads all `PENDING`/`FAILED`
   messages in batches of 100 and marks them `SYNCED` on success.
+- A rejection that blames the batch's contents narrows the pass to one message
+  at a time, then quarantines the offender. Without that, a single message the
+  server will never accept fails its whole batch on every pass and blocks every
+  message behind it indefinitely.
 - Exponential backoff on failure; a periodic 15-minute pass catches messages
   captured while offline.
 - Distinguishes retryable failures (network errors, 5xx, 429) from permanent

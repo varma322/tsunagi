@@ -33,6 +33,9 @@ data class HomeUiState(
             counts.getOrElse(SyncStatus.UPLOADING) { 0 }
     val synced: Int get() = counts.getOrElse(SyncStatus.SYNCED) { 0 }
     val failed: Int get() = counts.getOrElse(SyncStatus.FAILED) { 0 }
+
+    /** Permanently refused by the server, and no longer in the upload queue. */
+    val quarantined: Int get() = counts.getOrElse(SyncStatus.QUARANTINED) { 0 }
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {

@@ -4,6 +4,43 @@ All notable changes to Tsunagi. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **A missed SMS broadcast no longer loses the message.** Capture relied
+  entirely on the live `SMS_RECEIVED` broadcast, which is best-effort: none is
+  delivered while the app is in the stopped state — where a force-stop or a
+  vendor battery manager can park it silently — and one can be lost to process
+  death between delivery and the database write. Neither is visible from the
+  receiver. Every sync pass now sweeps the platform SMS inbox from a stored
+  watermark and stores anything missing, so a missed broadcast costs a delay
+  instead of the message. A first sweep looks back one day, so installing the
+  app does not upload the phone's entire history.
+- **One rejected message no longer blocks the whole upload queue.** Uploads go
+  up in batches of 100, and a rejection marked every message in the batch
+  `FAILED` — which the next pass re-selected in the same order, with the same
+  offender at its head, forever. A message the server permanently refuses is now
+  isolated and quarantined, and the messages behind it go up. `attempt_count`
+  had been recorded since 1.0.0 but never read; this is what it was for.
+- **The same SMS seen twice is stored once.** Message ids were random per
+  capture, so the duplicate check could never match — a broadcast delivered
+  twice produced two rows and two uploads. Ids are now derived from the message
+  itself.
+- An empty originating address is treated as an unknown sender rather than
+  passed through, where the server rejected it and stalled the queue.
+- A message whose body decoded as empty was silently discarded; it is now
+  stored.
+- A message that failed to store no longer aborts the rest of its broadcast.
+
+### Added
+
+- An option to disable battery optimization for Tsunagi, which is what prevents
+  a missed broadcast rather than recovering from it. The app shows the prompt
+  only while the exemption is missing and re-checks it on return.
+- `QUARANTINED` sync status, surfaced in the UI, so a message that will never be
+  uploaded is visible rather than silently absent.
+
 ## [1.0.0] — 2026-08-12
 
 First stable release. An SMS captured on an Android phone is stored locally,

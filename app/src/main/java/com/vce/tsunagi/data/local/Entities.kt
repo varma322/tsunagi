@@ -10,12 +10,17 @@ import androidx.room.PrimaryKey
  *
  * PENDING -> UPLOADING -> SYNCED, with FAILED feeding back into the queue on
  * the next retry.
+ *
+ * QUARANTINED is the terminal exit: a message the server has permanently
+ * refused. It leaves the queue so it cannot block the messages behind it, but
+ * the row is kept so the rejection stays visible and diagnosable.
  */
 enum class SyncStatus {
     PENDING,
     UPLOADING,
     SYNCED,
     FAILED,
+    QUARANTINED,
 }
 
 /**
@@ -40,6 +45,11 @@ data class DeviceEntity(
 /**
  * A captured SMS. The id is generated here rather than by the server so a
  * retry after a lost response resolves to the same row on both sides.
+ *
+ * The id is derived from the message itself rather than drawn at random, so
+ * the same SMS seen twice — a repeated broadcast, or a broadcast the inbox
+ * sweep also finds — collapses onto one row instead of uploading twice. See
+ * [com.vce.tsunagi.data.MessageIdentity].
  */
 @Entity(
     tableName = "messages",

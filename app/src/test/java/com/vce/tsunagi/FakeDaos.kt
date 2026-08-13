@@ -48,6 +48,15 @@ class FakeMessageDao : MessageDao {
 
     override suspend fun find(id: String): MessageEntity? = rows[id]
 
+    override suspend fun existsNear(
+        sender: String,
+        body: String,
+        from: Long,
+        to: Long,
+    ): Boolean = rows.values.any {
+        it.sender == sender && it.body == body && it.receivedAt in from..to
+    }
+
     override suspend fun pendingBatch(limit: Int): List<MessageEntity> =
         rows.values
             .filter { it.syncStatus == SyncStatus.PENDING || it.syncStatus == SyncStatus.FAILED }
@@ -83,6 +92,21 @@ class FakeMessageDao : MessageDao {
             }
         }
     }
+
+    override suspend fun quarantine(ids: List<String>, error: String?) {
+        ids.forEach { id ->
+            rows[id]?.let {
+                rows[id] = it.copy(
+                    syncStatus = SyncStatus.QUARANTINED,
+                    attemptCount = it.attemptCount + 1,
+                    lastError = error,
+                )
+            }
+        }
+    }
+
+    override suspend fun quarantinedCount(): Int =
+        rows.values.count { it.syncStatus == SyncStatus.QUARANTINED }
 
     override suspend fun deleteSyncedBefore(cutoff: Long): Int {
         val doomed = rows.values.filter {

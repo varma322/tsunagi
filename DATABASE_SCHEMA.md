@@ -196,11 +196,11 @@ Every captured SMS, with its synchronization state.
 
 | Column          | Kotlin type  | Notes                                        |
 |-----------------|--------------|----------------------------------------------|
-| `id`            | `String` PK  | UUIDv4, generated at capture time            |
+| `id`            | `String` PK  | UUIDv5-style, derived from the message itself |
 | `sender`        | `String`     |                                              |
 | `body`          | `String`     |                                              |
 | `received_at`   | `Long`       | Epoch millis, from the SMS PDU               |
-| `sync_status`   | `SyncStatus` | `PENDING` · `UPLOADING` · `SYNCED` · `FAILED`|
+| `sync_status`   | `SyncStatus` | `PENDING` · `UPLOADING` · `SYNCED` · `FAILED` · `QUARANTINED` |
 | `synced_at`     | `Long?`      | Set when the server confirms the upload      |
 | `attempt_count` | `Int`        | Upload attempts so far; surfaces stuck rows  |
 | `last_error`    | `String?`    | Reason the last attempt failed               |
@@ -227,11 +227,21 @@ data class MessageEntity(
 ```text
 PENDING ──▶ UPLOADING ──▶ SYNCED        (2xx from server)
                 │
-                └───────▶ FAILED ──▶ PENDING   (WorkManager retry w/ backoff)
+                ├───────▶ FAILED ──▶ PENDING   (WorkManager retry w/ backoff)
+                │
+                └───────▶ QUARANTINED          (server refuses it permanently)
 ```
 
 - The `sync_status` index lets the sync worker cheaply select the upload queue
   (`WHERE sync_status IN ('PENDING', 'FAILED')`).
+- `QUARANTINED` is the queue's only permanent exit. Uploads go up in batches, so
+  a message the server will never accept — one whose `sender` the server rejects,
+  say — fails the whole batch, and would be re-selected with the same batch
+  forever, blocking every message behind it. On a rejection that blames the
+  content (a 4xx that is not 401, 403, 408 or 429), the pass narrows to one
+  message at a time to find the offender, sets that one aside, and carries on.
+  The row is kept, and the count is surfaced in the UI, so a message that will
+  never be uploaded is visible rather than silently absent.
 - A process killed mid-upload leaves rows in `UPLOADING`. Every sync pass starts
   by returning those to `PENDING`, so an interrupted upload cannot strand a
   message permanently.
@@ -241,6 +251,10 @@ PENDING ──▶ UPLOADING ──▶ SYNCED        (2xx from server)
   exists nowhere else.
 - Because the message `id` is the primary key on **both** sides, a retry after
   a lost response is harmless — the server resolves it to the existing row.
+- The `id` is derived from `sender`, `body` and `received_at` rather than drawn
+  at random, so the same SMS always produces the same id. That is what lets a
+  broadcast delivered twice, and the inbox sweep re-reading a message the
+  broadcast already captured, collapse onto one row instead of uploading twice.
 
 ---
 

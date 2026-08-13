@@ -13,7 +13,6 @@ import com.vce.tsunagi.data.remote.RegisterRequest
 import com.vce.tsunagi.data.remote.TsunagiApi
 import java.io.IOException
 import java.time.Instant
-import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import retrofit2.HttpException
 
@@ -36,6 +35,7 @@ class TsunagiRepository(
     private val messageDao: MessageDao,
     private val settings: SyncSettings,
     private val apiProvider: (String) -> TsunagiApi = ApiFactory::create,
+    private val inbox: InboxSource = InboxSource.Empty,
 ) {
 
     fun observeDevice(): Flow<DeviceEntity?> = deviceDao.observe()
@@ -49,13 +49,18 @@ class TsunagiRepository(
     suspend fun pendingCount(): Int = messageDao.pendingCount()
 
     /**
-     * Stores a captured SMS. Returns false when this id was already stored,
-     * which happens if the SMS broadcast is delivered more than once.
+     * Stores a captured SMS. Returns false when this message was already
+     * stored, which happens if the SMS broadcast is delivered more than once,
+     * or if [backfill] re-reads a message the broadcast already caught.
+     *
+     * The id is derived from the message rather than drawn at random, which is
+     * what makes that check work at all: two sightings of one SMS produce the
+     * same id and collapse onto one row.
      */
     suspend fun captureSms(sender: String, body: String, receivedAt: Long): Boolean {
         val rowId = messageDao.insert(
             MessageEntity(
-                id = UUID.randomUUID().toString(),
+                id = MessageIdentity.of(sender, body, receivedAt),
                 sender = sender,
                 body = body,
                 receivedAt = receivedAt,
@@ -64,13 +69,77 @@ class TsunagiRepository(
         return rowId != -1L
     }
 
+    /**
+     * Recovers messages the live broadcast never delivered.
+     *
+     * The broadcast is best-effort: none arrive while the app sits in the
+     * stopped state, where a force-stop or a battery manager can park it
+     * silently, and one can be lost to process death between delivery and the
+     * write. Neither is visible from the receiver, so the queue is reconciled
+     * against the platform's own copy instead of trusting that every broadcast
+     * arrived.
+     *
+     * Returns the number of messages recovered.
+     */
+    suspend fun backfill(): Int {
+        val now = System.currentTimeMillis()
+        val watermark = settings.snapshot().lastBackfillAt
+            // A first sweep starts from a bounded look-back. Reading from zero
+            // would upload the phone's entire message history on install,
+            // which is a surprise rather than a recovery.
+            ?: (now - INITIAL_BACKFILL_LOOKBACK_MILLIS)
+
+        // Re-read a little of what was already swept: the watermark is a
+        // provider timestamp, and a message can be written to the store just
+        // behind one already read. The id check makes the overlap free.
+        val cutoff = (watermark - BACKFILL_OVERLAP_MILLIS).coerceAtLeast(0)
+
+        val candidates = inbox.since(cutoff, BACKFILL_SCAN_LIMIT)
+        if (candidates.isEmpty()) return 0
+
+        var recovered = 0
+        for (candidate in candidates) {
+            if (storeIfMissing(candidate)) recovered++
+        }
+
+        // Advance only as far as what was actually examined. A sweep cut short
+        // by the scan limit leaves the rest for the next pass rather than
+        // stepping over it.
+        val examined = candidates.maxOf { it.storedAt }
+        settings.recordBackfill(examined)
+
+        if (recovered > 0) {
+            Log.w(
+                TAG,
+                "inbox sweep recovered $recovered message(s) the broadcast did not deliver",
+            )
+        }
+        return recovered
+    }
+
+    /** True when the message was missing and has now been stored. */
+    private suspend fun storeIfMissing(candidate: InboxMessage): Boolean {
+        // The derived id catches the ordinary case, where both sightings agree
+        // on the timestamp. They disagree when the platform did not record a
+        // service centre time, so fall back to matching on content near the
+        // same moment rather than storing a second copy.
+        val near = messageDao.existsNear(
+            sender = candidate.sender,
+            body = candidate.body,
+            from = candidate.receivedAt - BACKFILL_MATCH_WINDOW_MILLIS,
+            to = candidate.receivedAt + BACKFILL_MATCH_WINDOW_MILLIS,
+        )
+        if (near) return false
+        return captureSms(candidate.sender, candidate.body, candidate.receivedAt)
+    }
+
     suspend fun currentDevice(): DeviceEntity? = deviceDao.get()
 
     suspend fun forgetDevice() = deviceDao.clear()
 
     /**
-     * Runs one sync pass: registers the device if needed, then uploads every
-     * pending message in batches.
+     * Runs one sync pass: recovers anything the broadcast missed, registers
+     * the device if needed, then uploads every pending message in batches.
      */
     suspend fun sync(): SyncOutcome {
         val config = settings.snapshot()
@@ -84,6 +153,16 @@ class TsunagiRepository(
             return SyncOutcome.Failure("Invalid server URL: ${error.message}")
         }
 
+        // Before uploading, not after: a message recovered here should leave
+        // on this pass rather than waiting for the next one.
+        try {
+            backfill()
+        } catch (error: Exception) {
+            // The sweep is a safety net. If it fails, the messages the
+            // broadcast did deliver must still go up.
+            Log.e(TAG, "inbox sweep failed", error)
+        }
+
         // A crash mid-upload can strand rows in UPLOADING; put them back in line.
         messageDao.requeueStranded()
 
@@ -93,8 +172,12 @@ class TsunagiRepository(
         }
 
         var uploaded = 0
+        // Narrowed to a single message once the server rejects a batch on its
+        // contents, so the offender can be found rather than guessed at.
+        var batchSize = BATCH_SIZE
+
         while (true) {
-            val batch = messageDao.pendingBatch(BATCH_SIZE)
+            val batch = messageDao.pendingBatch(batchSize)
             if (batch.isEmpty()) break
 
             val ids = batch.map { it.id }
@@ -106,12 +189,44 @@ class TsunagiRepository(
                 )
                 messageDao.markSynced(ids, System.currentTimeMillis())
                 uploaded += batch.size
-            } catch (error: HttpException) {
-                messageDao.markFailed(ids, "HTTP ${error.code()}")
-                return handleHttpError(error, "upload")
             } catch (error: IOException) {
                 messageDao.markFailed(ids, error.message)
                 return SyncOutcome.Retry("Network error: ${error.message}")
+            } catch (error: HttpException) {
+                if (!blamesTheMessage(error.code())) {
+                    // The connection or the credential is at fault, which
+                    // applies to every message equally. Nothing to isolate.
+                    messageDao.markFailed(ids, "HTTP ${error.code()}")
+                    return handleHttpError(error, "upload")
+                }
+
+                if (batch.size > 1) {
+                    // One of these is unacceptable and the rest are innocent,
+                    // but the response does not say which. Requeue and retry
+                    // one at a time to find out.
+                    messageDao.markFailed(ids, "HTTP ${error.code()}")
+                    Log.w(TAG, "batch of ${batch.size} refused (HTTP ${error.code()}); isolating")
+                    batchSize = 1
+                    continue
+                }
+
+                // Isolated and still refused, so retrying it unchanged will
+                // never succeed. Set it aside; leaving it queued would block
+                // every message behind it for good.
+                messageDao.quarantine(
+                    ids,
+                    "Server permanently refused this message (HTTP ${error.code()})",
+                )
+                Log.e(
+                    TAG,
+                    "quarantined message from ${batch.first().sender} " +
+                        "after HTTP ${error.code()}",
+                )
+                // The offender is out of the queue, so the rest can go back to
+                // travelling together. A second bad message will narrow it
+                // again; the cost is one wasted batch per offender, not a
+                // permanent drop to one request per message.
+                batchSize = BATCH_SIZE
             }
         }
 
@@ -204,6 +319,21 @@ class TsunagiRepository(
      * this device and has deliberately switched it off. Registering again would
      * walk straight back in under a new id and defeat the admin's decision.
      */
+    /**
+     * Whether a status names the batch's contents as the problem rather than
+     * the connection or the credential.
+     *
+     * 422 is the one that matters in practice: the batch endpoint validates
+     * every message before storing any, so one message the server will not
+     * accept — an empty sender, an unrepresentable timestamp — rejects the
+     * whole request, and will keep doing so on every retry.
+     *
+     * 401 and 403 are excluded because they are about this device, not this
+     * message, and 408 and 429 because they are worth retrying unchanged.
+     */
+    private fun blamesTheMessage(code: Int): Boolean =
+        code in 400..499 && code !in setOf(401, 403, 408, 429)
+
     private suspend fun handleHttpError(error: HttpException, stage: String): SyncOutcome {
         val code = error.code()
         return when {
@@ -237,5 +367,17 @@ class TsunagiRepository(
         const val TAG = "TsunagiRepository"
         const val BATCH_SIZE = 100
         const val MILLIS_PER_DAY = 24L * 60 * 60 * 1000
+
+        /** How far back a first sweep reads, before any watermark exists. */
+        const val INITIAL_BACKFILL_LOOKBACK_MILLIS = MILLIS_PER_DAY
+
+        /** Re-read window, covering a message stored just behind the watermark. */
+        const val BACKFILL_OVERLAP_MILLIS = 10L * 60 * 1000
+
+        /** How far apart two sightings of one message may report its time. */
+        const val BACKFILL_MATCH_WINDOW_MILLIS = 10L * 60 * 1000
+
+        /** Bounds one sweep, so a long backlog is worked through over several. */
+        const val BACKFILL_SCAN_LIMIT = 500
     }
 }

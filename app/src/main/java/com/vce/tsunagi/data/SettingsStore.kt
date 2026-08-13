@@ -15,6 +15,12 @@ data class TsunagiSettings(
     val lastSyncError: String? = null,
     /** Days to keep messages after the server confirms them; 0 keeps forever. */
     val retentionDays: Int = DEFAULT_RETENTION_DAYS,
+    /**
+     * How far the inbox sweep has read, as a platform store timestamp. Null
+     * until the first sweep, which is what tells it to start from a bounded
+     * look-back rather than the whole of the phone's message history.
+     */
+    val lastBackfillAt: Long? = null,
 ) {
     val isConfigured: Boolean
         get() = serverUrl.isNotBlank() && deviceName.isNotBlank()
@@ -36,6 +42,9 @@ interface SyncSettings {
      * server-side, so keeping one only leaves a dead secret on the phone.
      */
     fun clearEnrolmentCode()
+
+    /** Advance the inbox sweep watermark after a completed sweep. */
+    fun recordBackfill(at: Long)
 }
 
 /**
@@ -74,6 +83,10 @@ class SettingsStore(context: Context) : SyncSettings {
         get() = prefs.getInt(KEY_RETENTION_DAYS, TsunagiSettings.DEFAULT_RETENTION_DAYS)
         set(value) = prefs.edit().putInt(KEY_RETENTION_DAYS, value.coerceAtLeast(0)).apply()
 
+    var lastBackfillAt: Long?
+        get() = prefs.getLong(KEY_LAST_BACKFILL_AT, 0L).takeIf { it > 0L }
+        set(value) = prefs.edit().putLong(KEY_LAST_BACKFILL_AT, value ?: 0L).apply()
+
     override fun snapshot(): TsunagiSettings = TsunagiSettings(
         serverUrl = serverUrl,
         deviceName = deviceName,
@@ -81,6 +94,7 @@ class SettingsStore(context: Context) : SyncSettings {
         lastSyncAt = lastSyncAt,
         lastSyncError = lastSyncError,
         retentionDays = retentionDays,
+        lastBackfillAt = lastBackfillAt,
     )
 
     fun observe(): Flow<TsunagiSettings> = callbackFlow {
@@ -110,6 +124,10 @@ class SettingsStore(context: Context) : SyncSettings {
         prefs.edit().remove(KEY_SETUP_KEY).apply()
     }
 
+    override fun recordBackfill(at: Long) {
+        prefs.edit().putLong(KEY_LAST_BACKFILL_AT, at).apply()
+    }
+
     fun recordSyncSuccess(at: Long) {
         prefs.edit()
             .putLong(KEY_LAST_SYNC_AT, at)
@@ -129,5 +147,6 @@ class SettingsStore(context: Context) : SyncSettings {
         const val KEY_LAST_SYNC_AT = "last_sync_at"
         const val KEY_LAST_SYNC_ERROR = "last_sync_error"
         const val KEY_RETENTION_DAYS = "retention_days"
+        const val KEY_LAST_BACKFILL_AT = "last_backfill_at"
     }
 }

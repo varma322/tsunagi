@@ -1,14 +1,18 @@
 package com.vce.tsunagi
 
+import com.vce.tsunagi.data.InboxMessage
+import com.vce.tsunagi.data.InboxSource
 import com.vce.tsunagi.data.SyncOutcome
 import com.vce.tsunagi.data.SyncSettings
 import com.vce.tsunagi.data.TsunagiRepository
 import com.vce.tsunagi.data.TsunagiSettings
 import com.vce.tsunagi.data.local.MessageEntity
 import com.vce.tsunagi.data.local.SyncStatus
+import com.vce.tsunagi.data.remote.BatchResponse
 import java.io.IOException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -43,6 +47,7 @@ class TsunagiRepositoryTest {
     /** Records whether the enrolment code was discarded after registration. */
     private class FakeSettings(private var current: TsunagiSettings) : SyncSettings {
         var codeCleared = false
+        var backfillWatermark: Long? = null
 
         override fun snapshot(): TsunagiSettings = current
 
@@ -50,17 +55,26 @@ class TsunagiRepositoryTest {
             codeCleared = true
             current = current.copy(setupKey = "")
         }
+
+        override fun recordBackfill(at: Long) {
+            backfillWatermark = at
+            current = current.copy(lastBackfillAt = at)
+        }
     }
 
     private lateinit var settings: FakeSettings
 
-    private fun repository(config: TsunagiSettings = configured): TsunagiRepository {
+    private fun repository(
+        config: TsunagiSettings = configured,
+        inbox: InboxSource = InboxSource.Empty,
+    ): TsunagiRepository {
         settings = FakeSettings(config)
         return TsunagiRepository(
             deviceDao = deviceDao,
             messageDao = messageDao,
             settings = settings,
             apiProvider = { api },
+            inbox = inbox,
         )
     }
 
@@ -296,15 +310,239 @@ class TsunagiRepositoryTest {
     }
 
     @Test
-    fun `capturing the same message id twice stores one row`() = runTest {
+    fun `a message delivered twice by the broadcast is stored once`() = runTest {
         val repository = repository()
+
+        assertTrue(repository.captureSms("+15551234567", "your code is 4821", 1_000L))
+        assertFalse(
+            "a repeated broadcast must not add a second row",
+            repository.captureSms("+15551234567", "your code is 4821", 1_000L),
+        )
+
+        assertEquals(1, messageDao.rows.size)
+    }
+
+    @Test
+    fun `distinct messages from one sender are kept apart`() = runTest {
+        val repository = repository()
+
         assertTrue(repository.captureSms("+15551234567", "first", 1_000L))
         assertTrue(repository.captureSms("+15551234567", "second", 2_000L))
+        // Same text, later moment: a genuine repeat, not a duplicate delivery.
+        assertTrue(repository.captureSms("+15551234567", "first", 3_000L))
 
-        // Distinct ids are generated per capture, so both are stored.
+        assertEquals(3, messageDao.rows.size)
+    }
+
+    // --- capture recovery ------------------------------------------------
+
+    private fun inboxOf(vararg messages: InboxMessage) =
+        InboxSource { cutoff, _ -> messages.filter { it.storedAt > cutoff } }
+
+    /**
+     * A repository whose sweep has already run once, so it reads from a fixed
+     * watermark. Without one the sweep starts from a look-back measured
+     * against the real clock, and no fixed test timestamp falls inside it.
+     */
+    private fun sweeping(vararg messages: InboxMessage) = repository(
+        config = configured.copy(lastBackfillAt = 1L),
+        inbox = inboxOf(*messages),
+    )
+
+    @Test
+    fun `the sweep recovers a message the broadcast never delivered`() = runTest {
+        deviceDao.device = registeredDevice()
+
+        val outcome = sweeping(
+            InboxMessage(
+                sender = "AX-AIRTEL",
+                body = "your code is 4821",
+                receivedAt = 5_000L,
+                storedAt = 5_000L,
+            )
+        ).sync()
+
+        assertEquals(SyncOutcome.Success(1), outcome)
+        assertEquals(1, messageDao.rows.size)
+        assertEquals("AX-AIRTEL", messageDao.rows.values.single().sender)
+    }
+
+    @Test
+    fun `the sweep does not re-store what the broadcast already captured`() = runTest {
+        deviceDao.device = registeredDevice()
+        val repository = sweeping(
+            InboxMessage(
+                sender = "AX-AIRTEL",
+                body = "your code is 4821",
+                receivedAt = 5_000L,
+                storedAt = 5_000L,
+            )
+        )
+        repository.captureSms("AX-AIRTEL", "your code is 4821", 5_000L)
+
+        repository.sync()
+
+        assertEquals(1, messageDao.rows.size)
+    }
+
+    @Test
+    fun `the sweep tolerates the inbox and the broadcast disagreeing on the time`() = runTest {
+        deviceDao.device = registeredDevice()
+        // The platform recorded no service centre time, so its timestamp is
+        // the moment it stored the message rather than the one the broadcast
+        // reported. The derived ids differ; the message is still the same one.
+        val repository = sweeping(
+            InboxMessage(
+                sender = "AX-AIRTEL",
+                body = "your code is 4821",
+                receivedAt = 65_000L,
+                storedAt = 65_000L,
+            )
+        )
+        repository.captureSms("AX-AIRTEL", "your code is 4821", 5_000L)
+
+        repository.sync()
+
+        assertEquals(1, messageDao.rows.size)
+    }
+
+    @Test
+    fun `a message far from any capture is not mistaken for one`() = runTest {
+        deviceDao.device = registeredDevice()
+        // Same sender and text, but hours apart: a genuine repeat that the
+        // tolerance window must not swallow.
+        val repository = sweeping(
+            InboxMessage("AX-AIRTEL", "your code is 4821", 5_000L + 4 * 60 * 60 * 1000, 9_000L)
+        )
+        repository.captureSms("AX-AIRTEL", "your code is 4821", 5_000L)
+
+        repository.sync()
+
         assertEquals(2, messageDao.rows.size)
-        // Re-inserting a known id is ignored.
-        assertEquals(-1L, messageDao.insert(messageDao.rows.values.first()))
+    }
+
+    @Test
+    fun `a recovered message uploads on the same pass`() = runTest {
+        deviceDao.device = registeredDevice()
+
+        val outcome = sweeping(
+            InboxMessage("AX-AIRTEL", "code 1", 5_000L, 5_000L),
+            InboxMessage("AX-AIRTEL", "code 2", 6_000L, 6_000L),
+        ).sync()
+
+        assertEquals(SyncOutcome.Success(2), outcome)
+        assertEquals(2, api.uploadedBatches.single().messages.size)
+        assertTrue(messageDao.rows.values.all { it.syncStatus == SyncStatus.SYNCED })
+    }
+
+    @Test
+    fun `the sweep watermark advances so the next pass does not re-read`() = runTest {
+        deviceDao.device = registeredDevice()
+
+        sweeping(InboxMessage("AX-AIRTEL", "code 1", 5_000L, 7_000L)).sync()
+
+        assertEquals(7_000L, settings.backfillWatermark)
+    }
+
+    @Test
+    fun `a first sweep does not upload the phone's whole message history`() = runTest {
+        deviceDao.device = registeredDevice()
+        val now = System.currentTimeMillis()
+        // No watermark yet, so the look-back decides. A message from last year
+        // predates the install and must not be swept up on first run.
+        val outcome = repository(
+            inbox = inboxOf(
+                InboxMessage("AX-AIRTEL", "ancient", now - 365 * DAY, now - 365 * DAY),
+                InboxMessage("AX-AIRTEL", "recent", now - 60_000L, now - 60_000L),
+            )
+        ).sync()
+
+        assertEquals(SyncOutcome.Success(1), outcome)
+        assertEquals("recent", messageDao.rows.values.single().body)
+    }
+
+    // --- a message the server will never accept --------------------------
+
+    @Test
+    fun `a message the server permanently refuses is set aside`() = runTest {
+        deviceDao.device = registeredDevice()
+        seedPending(1)
+        api.uploadBehaviour = { throw httpError(422) }
+
+        val outcome = repository().sync()
+
+        assertEquals(SyncOutcome.Idle("No pending messages."), outcome)
+        assertEquals(SyncStatus.QUARANTINED, messageDao.rows.values.single().syncStatus)
+        // Out of the queue, so it cannot be selected again.
+        assertEquals(0, messageDao.pendingCount())
+    }
+
+    @Test
+    fun `one refused message does not block the rest of the queue`() = runTest {
+        deviceDao.device = registeredDevice()
+        seedPending(3)
+        val poison = messageDao.rows.values.first { it.body == "body 1" }.id
+        api.uploadBehaviour = { request ->
+            if (request.messages.any { it.id == poison }) throw httpError(422)
+            BatchResponse(
+                accepted = request.messages.size,
+                created = request.messages.size,
+                duplicates = 0,
+            )
+        }
+
+        val outcome = repository().sync()
+
+        // The two innocent messages still went up.
+        assertEquals(SyncOutcome.Success(2), outcome)
+        assertEquals(
+            SyncStatus.QUARANTINED,
+            messageDao.rows.getValue(poison).syncStatus,
+        )
+        assertTrue(
+            messageDao.rows.values
+                .filter { it.id != poison }
+                .all { it.syncStatus == SyncStatus.SYNCED },
+        )
+        assertEquals(0, messageDao.pendingCount())
+    }
+
+    @Test
+    fun `several refused messages are each set aside`() = runTest {
+        deviceDao.device = registeredDevice()
+        seedPending(5)
+        val poison = messageDao.rows.values
+            .filter { it.body == "body 1" || it.body == "body 3" }
+            .map { it.id }
+            .toSet()
+        api.uploadBehaviour = { request ->
+            if (request.messages.any { it.id in poison }) throw httpError(422)
+            BatchResponse(
+                accepted = request.messages.size,
+                created = request.messages.size,
+                duplicates = 0,
+            )
+        }
+
+        val outcome = repository().sync()
+
+        assertEquals(SyncOutcome.Success(3), outcome)
+        assertEquals(2, messageDao.quarantinedCount())
+        assertEquals(0, messageDao.pendingCount())
+    }
+
+    @Test
+    fun `a disabled device is not mistaken for a bad message`() = runTest {
+        deviceDao.device = registeredDevice()
+        seedPending(3)
+        api.uploadBehaviour = { throw httpError(403) }
+
+        val outcome = repository().sync()
+
+        assertTrue(outcome is SyncOutcome.Failure)
+        // Nothing quarantined: the device is at fault, not the messages.
+        assertTrue(messageDao.rows.values.none { it.syncStatus == SyncStatus.QUARANTINED })
+        assertEquals(3, messageDao.pendingCount())
     }
 
     // --- retention -------------------------------------------------------

@@ -7,6 +7,11 @@
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.READ_SMS" />
 
+    <!-- An app under battery optimization can be parked in the stopped state,
+         where SMS broadcasts are not delivered to it at all. The inbox sweep
+         recovers what is missed, but only an exemption prevents the miss. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <!-- SMS capture is the whole point of the app, so a device without
          telephony cannot run it usefully. -->
     <uses-feature

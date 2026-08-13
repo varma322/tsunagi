@@ -58,14 +58,26 @@ class SmsReceiver : BroadcastReceiver() {
             try {
                 var stored = 0
                 for (message in captured) {
-                    if (repository.captureSms(message.sender, message.body, message.receivedAt)) {
-                        stored++
+                    // Per message, not per broadcast: one that cannot be
+                    // stored must not take the rest of the broadcast with it.
+                    try {
+                        if (repository.captureSms(
+                                message.sender,
+                                message.body,
+                                message.receivedAt,
+                            )
+                        ) {
+                            stored++
+                        }
+                    } catch (error: Exception) {
+                        Log.e(TAG, "failed to store message from ${message.sender}", error)
                     }
                 }
                 Log.i(TAG, "stored $stored of ${captured.size} message(s)")
-                if (stored > 0) {
-                    SyncScheduler.syncNow(appContext)
-                }
+                // Always, even when nothing was stored. A message that only
+                // looked like a duplicate still deserves a pass, and the sweep
+                // that runs with it is what recovers anything dropped here.
+                SyncScheduler.syncNow(appContext)
             } catch (error: Exception) {
                 // Never let a capture failure crash the system broadcast.
                 Log.e(TAG, "failed to store incoming SMS", error)
@@ -87,13 +99,19 @@ class SmsReceiver : BroadcastReceiver() {
 
         fun flush() {
             val sender = currentSender ?: return
-            if (currentBody.isNotEmpty()) {
-                assembled += CapturedSms(sender, currentBody.toString(), currentTimestamp)
-            }
+            // Stored even when the body came back empty. Dropping it here lost
+            // the message with nothing recorded but a count, and an empty body
+            // is something the server accepts and the user can see.
+            assembled += CapturedSms(sender, currentBody.toString(), currentTimestamp)
         }
 
         for (part in parts) {
-            val sender = part.displayOriginatingAddress ?: part.originatingAddress ?: UNKNOWN_SENDER
+            // Blank counts as absent, not just null. An empty originating
+            // address reaches the server as a sender it rejects outright, and
+            // a rejected message used to stall every message behind it.
+            val sender = part.displayOriginatingAddress?.takeIf(String::isNotBlank)
+                ?: part.originatingAddress?.takeIf(String::isNotBlank)
+                ?: UNKNOWN_SENDER
             if (sender != currentSender) {
                 flush()
                 currentSender = sender
