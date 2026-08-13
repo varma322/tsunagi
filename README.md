@@ -130,6 +130,7 @@ classified as retryable or permanent.
 |----------|----------|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | System structure, components, security model, deployment |
 | [API_SPEC.md](API_SPEC.md) | Full REST and WebSocket contract |
+| [API_GUIDE.md](API_GUIDE.md) | Integration guide for API consumers, with worked examples |
 | [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | PostgreSQL, Redis, and Room schemas |
 | [ROADMAP.md](ROADMAP.md) | Milestones, current status, known gaps |
 | [CHANGELOG.md](CHANGELOG.md) | What changed in each release |
