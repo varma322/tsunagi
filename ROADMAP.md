@@ -23,10 +23,14 @@ retention policy, admin/read-only roles, and single-use device enrolment.
 - [x] Frontend design mockups in [tmp/frontend/](tmp/frontend/), built on the
       Tsunagi Core design system
       ([DESIGN.md](tmp/frontend/tsunagi_core/DESIGN.md))
-- [ ] TLS guide, CONTRIBUTING, and v1.0 release
+- [x] TLS guide, CONTRIBUTING, and v1.0 release
+
+Since v1.0, capture has been reworked so a message the SMS broadcast never
+delivers is recovered rather than lost — see the unreleased section of
+[CHANGELOG.md](CHANGELOG.md) and **Capture reliability** under Known Gaps.
 
 Verification currently in place: 79 backend tests (`cd backend && pytest`),
-18 Android unit tests (`gradlew :app:testDebugUnitTest`), a frontend typecheck
+36 Android unit tests (`gradlew :app:testDebugUnitTest`), a frontend typecheck
 (`npm run typecheck`), and [scripts/smoke_test.py](scripts/smoke_test.py), which
 walks the full register → upload → read path against any running server.
 [scripts/seed_demo.py](scripts/seed_demo.py) populates a throwaway database for
@@ -65,7 +69,7 @@ exercising the dashboard.
 - [x] Bearer-token authentication with device / user / admin scopes
 - [x] `last_seen` tracking and derived online status
 
-### Milestone 3 — Read APIs & Inbox 🚧
+### Milestone 3 — Read APIs & Inbox ✅
 
 **Backend**
 - [x] `GET /api/v1/messages` with `limit`, `offset`, `sender`, `device_id`,
@@ -98,7 +102,7 @@ exercising the dashboard.
 - [x] Events page: live log with level filter, pause, and clear
 - [x] Responsive layouts — sidebar on desktop, bottom navigation on mobile
 
-### Milestone 5 — Multi-Device & Release 🚧
+### Milestone 5 — Multi-Device & Release ✅
 
 - [x] Multiple registered devices per server; per-device API filtering
 - [x] Aggregated multi-device inbox with a per-device filter
@@ -130,11 +134,47 @@ the next one.
 
 ## Known Gaps
 
-Things that work but are not yet production-hardened:
+Things that work but are not yet production-hardened.
+
+### Capture reliability
+
+The first principle below is "never lose a message", and until recently the app
+did not meet it. Capture depended entirely on the live `SMS_RECEIVED` broadcast,
+which the platform does not guarantee: none is delivered while the app sits in
+the stopped state — where a force-stop or a vendor battery manager can park it,
+with no callback and nothing in the log — and one can be lost to process death
+between delivery and the database write. Neither is detectable from inside the
+receiver, so a missed message left no trace anywhere.
+
+Every sync pass now sweeps the platform SMS inbox and stores what is missing,
+which turns any missed broadcast into a delay rather than a loss, and the app
+offers to exempt itself from battery optimization to prevent the miss in the
+first place. What remains open:
+
+- **The sweep has not been verified against a real SMS provider.** Its logic is
+  unit-tested against a fake inbox; the `ContentResolver` query itself has only
+  been exercised by hand.
+- **A phone that has stopped capturing still reports healthy.** The heartbeat
+  proves the app can reach the server, not that it can still receive SMS, so a
+  permanently broken device looks identical to a quiet one on the dashboard.
+- **Batch upload is all-or-nothing server-side.** One message that fails
+  validation rejects the whole request. The Android client isolates and
+  quarantines the offender so this no longer blocks the queue, but the endpoint
+  could report per-message results instead.
+
+### Testing
 
 - **No automated end-to-end test of the Android app against a live server.**
   The sync engine is unit-tested with fakes and verified by hand on a device;
-  an instrumented test would close the gap.
+  an instrumented test would close the gap. `app/src/androidTest/` currently
+  holds only the generated example, so the Room queries added for the inbox
+  sweep have never run against real SQLite.
+- **`GET /api/v1/me` has no backend test.** It is what lets an idle device
+  report that it is still alive, and nothing under `backend/tests/` exercises
+  it.
+
+### Everything else
+
 - **Event log is capped and transient.** Suitable for the dashboard's live view,
   not for auditing. Deliberate — durable audit logging is a Phase 2 feature.
 - **Rate limiting uses a fixed window.** A client can send up to double the
@@ -143,8 +183,11 @@ Things that work but are not yet production-hardened:
 - **Enrolment codes are ~39 bits.** Safe because they are single-use and expire
   in minutes, and the API is rate limited — but they would be weak as a
   long-lived credential, so do not extend their TTL to days.
+- **R8/minification is disabled for the Android release build**
+  (`app/build.gradle.kts`). Enabling it needs keep rules for the Retrofit and
+  kotlinx-serialization models.
 
-All the hardening items previously listed here are closed: rate limiting
+The v1.0 hardening items are closed: rate limiting
 ([`app/ratelimit.py`](backend/app/ratelimit.py)), local retention on the phone,
 TLS deployment ([deployment/TLS.md](deployment/TLS.md)), and the shared setup
 key, now replaced by single-use enrolment codes.
