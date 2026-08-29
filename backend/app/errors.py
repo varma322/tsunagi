@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # 422 is spelled literally: Starlette renamed its constant and importing either
@@ -47,6 +48,22 @@ def bad_request(message: str) -> ApiError:
     return ApiError(status.HTTP_400_BAD_REQUEST, "bad_request", message)
 
 
+def describe_validation_error(exc: RequestValidationError | ValidationError, *, prefix: str = "") -> str:
+    """Render a validation failure as the single line the error envelope carries.
+
+    Shared with the batch endpoint, which validates message by message so it can
+    name the offender: one formatter means a message rejected inside a batch is
+    described exactly as one rejected on its own.
+    """
+    errors = exc.errors()
+    first = errors[0] if errors else {}
+    location = ".".join(str(part) for part in first.get("loc", ()) if part != "body")
+    if prefix:
+        location = f"{prefix}.{location}" if location else prefix
+    message = first.get("msg", "Request validation failed.")
+    return f"{location}: {message}" if location else message
+
+
 def _envelope(code: str, message: str, status_code: int, headers: dict | None = None) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
@@ -63,9 +80,4 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(_request: Request, exc: RequestValidationError) -> JSONResponse:
-        first = exc.errors()[0] if exc.errors() else {}
-        location = ".".join(str(part) for part in first.get("loc", ()) if part != "body")
-        message = first.get("msg", "Request validation failed.")
-        if location:
-            message = f"{location}: {message}"
-        return _envelope("validation_error", message, HTTP_422)
+        return _envelope("validation_error", describe_validation_error(exc), HTTP_422)

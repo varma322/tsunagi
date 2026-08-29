@@ -127,7 +127,15 @@ def test_batch_upload_reports_duplicates(client, device):
         headers=device["headers"],
     )
     assert response.status_code == 200
-    assert response.json() == {"accepted": 3, "created": 2, "duplicates": 1}
+    assert response.json() == {
+        "accepted": 3,
+        "created": 2,
+        "duplicates": 1,
+        "rejected": 0,
+        # Null, not an empty list: a request that did not ask for per-message
+        # results is told nothing was refused, which is what 200 already meant.
+        "results": None,
+    }
 
 
 def test_malformed_message_is_rejected(client, device):

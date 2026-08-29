@@ -12,6 +12,7 @@ import com.vce.tsunagi.data.TsunagiSettings
 import com.vce.tsunagi.data.local.MessageEntity
 import com.vce.tsunagi.data.local.SyncStatus
 import com.vce.tsunagi.data.remote.BatchResponse
+import com.vce.tsunagi.data.remote.MessageResult
 import java.io.IOException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -249,6 +250,152 @@ class TsunagiRepositoryTest {
 
         assertTrue(outcome is SyncOutcome.Idle)
         assertEquals("presence still has to be reported somehow", 1, api.heartbeats)
+    }
+
+    // --- per-message batch results ---------------------------------------
+
+    @Test
+    fun `a message the server names is quarantined and the rest go up`() = runTest {
+        // The whole point of asking for per-message results: the offender is
+        // identified on the pass that found it, instead of by re-uploading the
+        // batch one message at a time.
+        deviceDao.device = registeredDevice()
+        seedPending(3)
+        api.uploadBehaviour = { request ->
+            BatchResponse(
+                accepted = request.messages.size,
+                created = request.messages.size - 1,
+                duplicates = 0,
+                rejected = 1,
+                results = request.messages.mapIndexed { index, message ->
+                    if (index == 1) {
+                        MessageResult(
+                            index = index,
+                            id = message.id,
+                            status = "rejected",
+                            error = "messages.1.sender: String should have at least 1 character",
+                        )
+                    } else {
+                        MessageResult(index = index, id = message.id, status = "created")
+                    }
+                },
+            )
+        }
+
+        val outcome = repository().sync()
+
+        assertEquals(SyncOutcome.Success(2), outcome)
+        assertEquals(SyncStatus.SYNCED, messageDao.rows["message-0"]?.syncStatus)
+        assertEquals(SyncStatus.QUARANTINED, messageDao.rows["message-1"]?.syncStatus)
+        assertEquals(SyncStatus.SYNCED, messageDao.rows["message-2"]?.syncStatus)
+    }
+
+    @Test
+    fun `the reason the server gave is kept with the quarantined message`() = runTest {
+        deviceDao.device = registeredDevice()
+        seedPending(1)
+        api.uploadBehaviour = { request ->
+            BatchResponse(
+                accepted = 1,
+                created = 0,
+                duplicates = 0,
+                rejected = 1,
+                results = listOf(
+                    MessageResult(
+                        index = 0,
+                        id = request.messages.first().id,
+                        status = "rejected",
+                        error = "messages.0.received_at: Input should be a valid datetime",
+                    )
+                ),
+            )
+        }
+
+        repository().sync()
+
+        assertEquals(
+            "messages.0.received_at: Input should be a valid datetime",
+            messageDao.rows["message-0"]?.lastError,
+        )
+    }
+
+    @Test
+    fun `a duplicate counts as stored, not as refused`() = runTest {
+        deviceDao.device = registeredDevice()
+        seedPending(2)
+        api.uploadBehaviour = { request ->
+            BatchResponse(
+                accepted = 2,
+                created = 1,
+                duplicates = 1,
+                rejected = 0,
+                results = request.messages.mapIndexed { index, message ->
+                    MessageResult(
+                        index = index,
+                        id = message.id,
+                        status = if (index == 0) "duplicate" else "created",
+                    )
+                },
+            )
+        }
+
+        repository().sync()
+
+        assertTrue(messageDao.rows.values.all { it.syncStatus == SyncStatus.SYNCED })
+    }
+
+    @Test
+    fun `a verdict with no id falls back to the position it was sent in`() = runTest {
+        // The server omits the id when the id itself was the unreadable field,
+        // which is exactly when a message most needs to be taken out of the queue.
+        deviceDao.device = registeredDevice()
+        seedPending(1)
+        api.uploadBehaviour = {
+            BatchResponse(
+                accepted = 1,
+                created = 0,
+                duplicates = 0,
+                rejected = 1,
+                results = listOf(MessageResult(index = 0, id = null, status = "rejected")),
+            )
+        }
+
+        repository().sync()
+
+        assertEquals(SyncStatus.QUARANTINED, messageDao.rows["message-0"]?.syncStatus)
+    }
+
+    @Test
+    fun `a server that reports nothing per message is still trusted with the batch`() = runTest {
+        // An older server answers 200 with no results, which has always meant
+        // it took every message. Reading it any other way would strand them.
+        deviceDao.device = registeredDevice()
+        seedPending(2)
+        api.uploadBehaviour = { request ->
+            BatchResponse(
+                accepted = request.messages.size,
+                created = request.messages.size,
+                duplicates = 0,
+            )
+        }
+
+        val outcome = repository().sync()
+
+        assertEquals(SyncOutcome.Success(2), outcome)
+        assertTrue(messageDao.rows.values.all { it.syncStatus == SyncStatus.SYNCED })
+    }
+
+    @Test
+    fun `the upload asks for per-message results`() = runTest {
+        deviceDao.device = registeredDevice()
+        seedPending(1)
+
+        repository().sync()
+
+        assertTrue(
+            "without opting in the server answers all-or-nothing",
+            api.uploadedBatches.single().partial,
+        )
     }
 
     // --- capture health --------------------------------------------------

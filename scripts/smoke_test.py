@@ -197,6 +197,51 @@ def main() -> int:
         online = bool(entry and entry["status"])
     checks.record("device reports online", online, f"HTTP {status}")
 
+    # --- partial batches --------------------------------------------------
+    # One unacceptable message used to reject every message it travelled with.
+    # Sent the way the phone sends it, so a rename on either side shows up here
+    # rather than on someone's phone.
+    good = {
+        "id": str(uuid.uuid4()),
+        "sender": "+15550003333",
+        "body": "survives a bad neighbour",
+        "received_at": sent_at,
+    }
+    offender = {"id": str(uuid.uuid4()), "sender": "", "body": "no sender", "received_at": sent_at}
+
+    status, body = request(
+        "POST",
+        f"{base}/api/v1/messages/batch",
+        device_headers,
+        {"messages": [good, offender], "partial": True},
+    )
+    results = body.get("results") or [] if status == 200 else []
+    checks.record(
+        "a batch with one bad message stores the good one",
+        status == 200 and body.get("created") == 1 and body.get("rejected") == 1,
+        f"HTTP {status}: {body}",
+    )
+    checks.record(
+        "the refused message is named",
+        len(results) == 2
+        and results[0]["status"] == "created"
+        and results[1]["status"] == "rejected"
+        and results[1]["id"] == offender["id"],
+        str(results),
+    )
+
+    status, body = request(
+        "POST",
+        f"{base}/api/v1/messages/batch",
+        device_headers,
+        {"messages": [{**good, "id": str(uuid.uuid4())}, offender]},
+    )
+    checks.record(
+        "without opting in, one bad message still rejects the batch",
+        status == 422,
+        f"HTTP {status}",
+    )
+
     # --- capture health ---------------------------------------------------
     # Sent exactly as the phone sends it. A field renamed on one side and not
     # the other is a 422 that would otherwise only appear on someone's phone.

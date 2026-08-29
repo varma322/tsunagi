@@ -30,8 +30,8 @@ recovered rather than lost, stopped a quiet phone from reporting itself offline,
 and added installers for a VPS that already runs other services — see
 [CHANGELOG.md](CHANGELOG.md) and **Capture reliability** under Known Gaps.
 
-Verification currently in place: 91 backend tests (`cd backend && pytest`),
-42 Android unit tests (`gradlew :app:testDebugUnitTest`), 21 Android
+Verification currently in place: 105 backend tests (`cd backend && pytest`),
+50 Android unit tests (`gradlew :app:testDebugUnitTest`), 21 Android
 instrumented tests against real SQLite and a real SMS provider
 (`gradlew :app:connectedDebugAndroidTest`, needs a device or emulator),
 a frontend typecheck
@@ -166,10 +166,6 @@ battery manager parking the app in the stopped state. What remains open:
   diagnosed; the untested suspects are a message that never landed in the
   platform inbox for the sweep to find, and the watermark the sweep resumes
   from.
-- **Batch upload is all-or-nothing server-side.** One message that fails
-  validation rejects the whole request. The Android client isolates and
-  quarantines the offender so this no longer blocks the queue, but the endpoint
-  could report per-message results instead.
 
 ### Testing
 
@@ -194,6 +190,14 @@ battery manager parking the app in the stopped state. What remains open:
 - **R8/minification is disabled for the Android release build**
   (`app/build.gradle.kts`). Enabling it needs keep rules for the Retrofit and
   kotlinx-serialization models.
+
+Also closed: batch upload was all-or-nothing server-side, so one message the
+server would not accept rejected every message it travelled with, and the
+response could not say which. A batch may now ask for a verdict per message, and
+the app quarantines the named offender on the pass that found it rather than
+re-uploading the batch one message at a time to discover it. The default is
+unchanged, because a client that ignored per-message results would read 200 as
+"all stored" and drop the refused message.
 
 Closed since this section was written: a phone that had stopped capturing used
 to report healthy, because the heartbeat proved only that the app could reach

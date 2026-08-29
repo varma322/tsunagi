@@ -29,6 +29,24 @@ data class MessageUpload(
 @Serializable
 data class BatchRequest(
     @SerialName("messages") val messages: List<MessageUpload>,
+    /**
+     * Ask for a verdict per message rather than an all-or-nothing answer.
+     *
+     * Setting this is a promise to read [BatchResponse.results]: the server
+     * stores what it can and names what it refused, so treating the 200 as
+     * "everything landed" would drop exactly the message it is warning about.
+     * A server too old to know the field ignores it and answers as before.
+     */
+    @SerialName("partial") val partial: Boolean = true,
+)
+
+@Serializable
+data class MessageResult(
+    @SerialName("index") val index: Int,
+    /** Absent when the id was itself the unreadable part. */
+    @SerialName("id") val id: String? = null,
+    @SerialName("status") val status: String,
+    @SerialName("error") val error: String? = null,
 )
 
 @Serializable
@@ -36,6 +54,12 @@ data class BatchResponse(
     @SerialName("accepted") val accepted: Int,
     @SerialName("created") val created: Int,
     @SerialName("duplicates") val duplicates: Int,
+    @SerialName("rejected") val rejected: Int = 0,
+    /**
+     * One entry per message when the request opted in. Null from a server that
+     * does not report per message, whose 200 means it took all of them.
+     */
+    @SerialName("results") val results: List<MessageResult>? = null,
 )
 
 @Serializable

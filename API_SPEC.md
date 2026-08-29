@@ -394,11 +394,49 @@ Request:
 Response `200 OK`:
 
 ```json
-{ "accepted": 3, "created": 2, "duplicates": 1 }
+{ "accepted": 3, "created": 2, "duplicates": 1, "rejected": 0, "results": null }
 ```
 
 A replayed batch returns `created: 0`, which is the normal outcome when a
 previous response was lost in transit.
+
+By default one unacceptable message rejects the whole request with `422`, and
+the message names which: `messages.1.sender: String should have at least 1
+character`. Nothing in that batch is stored.
+
+#### Per-message results
+
+Add `"partial": true` to the request to have acceptable messages stored and the
+rest reported instead:
+
+```json
+{
+  "accepted": 3,
+  "created": 2,
+  "duplicates": 0,
+  "rejected": 1,
+  "results": [
+    { "index": 0, "id": "6f1c...", "status": "created" },
+    { "index": 1, "id": "8a2d...", "status": "rejected",
+      "error": "messages.1.sender: String should have at least 1 character" },
+    { "index": 2, "id": "9b3e...", "status": "created" }
+  ]
+}
+```
+
+`results` carries one entry per message in request order; `status` is `created`,
+`duplicate` or `rejected`. `id` is absent only when the id itself was the
+unreadable field, in which case `index` is the only handle on the message.
+
+**Setting `partial` is a promise to read `results`.** It is off by default
+because a client that ignores them would read `200` as "all stored" and drop the
+one message the server refused — so an older client keeps the all-or-nothing
+behaviour it already knows how to survive. A `null` `results` means every
+message was stored or already present, which is what a `200` meant before this
+field existed.
+
+The batch size cap and the "at least one message" rule still apply to a partial
+request, and still answer `422`: those describe the request, not a message in it.
 
 ### List Messages
 

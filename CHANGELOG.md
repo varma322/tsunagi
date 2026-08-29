@@ -26,6 +26,19 @@ All notable changes to Tsunagi. Format follows
   nothing new in it. Both used to come back as an empty list, which meant a
   revoked permission looked exactly like a quiet inbox — the same conflation as
   above, one layer down.
+- **A batch upload can report a verdict per message.** One message the server
+  would not accept rejected every message it travelled with, and the response
+  could not say which was at fault — so the phone found the offender by
+  re-uploading the batch one message at a time, and until it did, nothing behind
+  it moved. `POST /api/v1/messages/batch` now takes `"partial": true` and
+  answers with `created` / `duplicate` / `rejected` per message, each with the
+  reason it was refused. The app opts in and quarantines the named message on
+  the pass that found it.
+
+  `partial` is off by default and has to be: a client that ignored the results
+  would read `200` as "all stored" and drop the message the server refused. An
+  older app keeps the all-or-nothing behaviour it already survives, and the app
+  keeps its isolate-one-at-a-time path for servers that answer the old way.
 
 ### Changed
 

@@ -8,6 +8,7 @@ import com.vce.tsunagi.data.local.MessageEntity
 import com.vce.tsunagi.data.local.SyncStatus
 import com.vce.tsunagi.data.remote.ApiFactory
 import com.vce.tsunagi.data.remote.BatchRequest
+import com.vce.tsunagi.data.remote.BatchResponse
 import com.vce.tsunagi.data.remote.CheckInRequest
 import com.vce.tsunagi.data.remote.MessageUpload
 import com.vce.tsunagi.data.remote.RegisterRequest
@@ -214,12 +215,11 @@ class TsunagiRepository(
             val ids = batch.map { it.id }
             messageDao.markStatus(ids, SyncStatus.UPLOADING)
             try {
-                api.uploadBatch(
+                val response = api.uploadBatch(
                     authorization = ApiFactory.bearer(device.token),
                     body = BatchRequest(messages = batch.map(::toUpload)),
                 )
-                messageDao.markSynced(ids, System.currentTimeMillis())
-                uploaded += batch.size
+                uploaded += applyVerdicts(batch, ids, response)
             } catch (error: IOException) {
                 messageDao.markFailed(ids, error.message)
                 return SyncOutcome.Retry("Network error: ${error.message}")
@@ -232,9 +232,10 @@ class TsunagiRepository(
                 }
 
                 if (batch.size > 1) {
-                    // One of these is unacceptable and the rest are innocent,
-                    // but the response does not say which. Requeue and retry
-                    // one at a time to find out.
+                    // Only a server too old to report per message answers this
+                    // way: one of these is unacceptable and the rest are
+                    // innocent, and the response does not say which. Requeue
+                    // and retry one at a time to find out.
                     messageDao.markFailed(ids, "HTTP ${error.code()}")
                     Log.w(TAG, "batch of ${batch.size} refused (HTTP ${error.code()}); isolating")
                     batchSize = 1
@@ -283,6 +284,48 @@ class TsunagiRepository(
             Log.w(TAG, "upload succeeded but the check-in did not: $problem")
         }
         return SyncOutcome.Success(uploaded)
+    }
+
+    /**
+     * Applies the server's answer to the rows just sent, returning how many it
+     * stored.
+     *
+     * A server that reports per message names what it refused, so the offender
+     * can be set aside on the pass that found it. Without that the only way to
+     * identify it was to re-upload the batch one message at a time, and until
+     * it was found nothing behind it could go up at all.
+     */
+    private suspend fun applyVerdicts(
+        batch: List<MessageEntity>,
+        ids: List<String>,
+        response: BatchResponse,
+    ): Int {
+        val results = response.results
+        if (results == null) {
+            // An older server. Its 200 has always meant it took every message,
+            // and reading it any other way here would strand them.
+            messageDao.markSynced(ids, System.currentTimeMillis())
+            return batch.size
+        }
+
+        // A verdict names its message by id, falling back to the position it
+        // occupied in the request when the id was the unreadable part.
+        val refused = results
+            .filter { it.status == STATUS_REJECTED }
+            .mapNotNull { result ->
+                val id = result.id ?: batch.getOrNull(result.index)?.id
+                id?.let { it to (result.error ?: "The server refused this message.") }
+            }
+
+        val stored = ids - refused.map { it.first }.toSet()
+        if (stored.isNotEmpty()) messageDao.markSynced(stored, System.currentTimeMillis())
+
+        for ((id, reason) in refused) {
+            // Refused on its own terms, so a retry cannot change the answer.
+            messageDao.quarantine(listOf(id), reason)
+            Log.e(TAG, "quarantined a message the server refused: $reason")
+        }
+        return stored.size
     }
 
     /**
@@ -448,6 +491,9 @@ class TsunagiRepository(
     private companion object {
         const val TAG = "TsunagiRepository"
         const val BATCH_SIZE = 100
+
+        /** The one per-message verdict that means the message was not stored. */
+        const val STATUS_REJECTED = "rejected"
         const val MILLIS_PER_DAY = 24L * 60 * 60 * 1000
 
         /** How far back a first sweep reads, before any watermark exists. */

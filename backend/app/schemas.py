@@ -155,7 +155,23 @@ class MessageCreate(BaseModel):
 
 
 class MessageBatchCreate(BaseModel):
-    messages: list[MessageCreate] = Field(min_length=1, max_length=500)
+    """A batch upload.
+
+    `messages` is untyped here and validated one message at a time, which is
+    what lets a single unacceptable message be named instead of rejecting the
+    batch it arrived in. With `partial` false — the default — the outcome is
+    unchanged: the first invalid message rejects the whole request with the
+    same 422.
+    """
+
+    messages: list[Any] = Field(min_length=1, max_length=500)
+    #: Accept what is valid and report the rest, rather than refusing the batch.
+    #:
+    #: Off by default, and it has to be. A client that does not read the
+    #: per-message results would take 200 to mean everything was stored and
+    #: drop the one message the server refused — which is the failure this
+    #: whole project is built to avoid. Opting in is a promise to read them.
+    partial: bool = False
 
 
 class MessageOut(BaseModel):
@@ -180,10 +196,30 @@ class MessageWaitResponse(BaseModel):
     messages: list[MessageOut]
 
 
+#: What became of one message in a batch.
+MessageStatus = Literal["created", "duplicate", "rejected"]
+
+
+class MessageResult(BaseModel):
+    """The fate of a single message, by its position in the request."""
+
+    index: int
+    #: Absent when the id itself was unreadable.
+    id: uuid.UUID | None = None
+    status: MessageStatus
+    #: Why it was refused, worded as the whole-batch rejection would have been.
+    error: str | None = None
+
+
 class MessageBatchResponse(BaseModel):
     accepted: int
     created: int
     duplicates: int
+    #: Always 0 unless the request opted in to partial acceptance.
+    rejected: int = 0
+    #: Present only for a partial request. Null means every message was stored
+    #: or already present — the same guarantee a 200 carried before.
+    results: list[MessageResult] | None = None
 
 
 # --- api keys -------------------------------------------------------------

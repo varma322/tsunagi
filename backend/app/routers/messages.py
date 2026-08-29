@@ -4,12 +4,14 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Query, Response, status
 
 from app.deps import BusDep, DeviceDep, ReaderDep, SessionDep, SettingsDep
+from app.errors import ApiError
 from app.schemas import (
     MessageBatchCreate,
     MessageBatchResponse,
     MessageCreate,
     MessageListResponse,
     MessageOut,
+    MessageResult,
     MessageWaitResponse,
 )
 from app.services import MessageService
@@ -49,11 +51,45 @@ async def upload_batch(
     bus: BusDep,
     settings: SettingsDep,
 ) -> MessageBatchResponse:
-    created, duplicates = await MessageService(session, bus, settings).ingest_batch(
-        device, payload.messages
+    """Upload a batch, either whole or message by message.
+
+    By default one unacceptable message rejects the request, as it always has.
+    A client that sets `partial` gets the acceptable ones stored and a verdict
+    per message, which is what lets it quarantine the offender without having
+    to find it by re-uploading the batch one message at a time.
+    """
+    service = MessageService(session, bus, settings)
+    accepted = len(payload.messages)
+    valid, rejected = service.parse_batch(payload.messages)
+
+    if rejected and not payload.partial:
+        # The caller has not promised to read per-message results, so telling
+        # it "200, mostly" would invite it to drop the message named below.
+        raise ApiError(422, "validation_error", rejected[0].error or "Invalid message.")
+
+    created, duplicates, created_flags = await service.ingest_batch(
+        device, [message for _, message in valid]
     )
+
+    if not payload.partial:
+        return MessageBatchResponse(accepted=accepted, created=created, duplicates=duplicates)
+
+    results = rejected + [
+        MessageResult(
+            index=index,
+            id=message.id,
+            status="created" if was_created else "duplicate",
+        )
+        for (index, message), was_created in zip(valid, created_flags, strict=True)
+    ]
+    results.sort(key=lambda result: result.index)
+
     return MessageBatchResponse(
-        accepted=len(payload.messages), created=created, duplicates=duplicates
+        accepted=accepted,
+        created=created,
+        duplicates=duplicates,
+        rejected=len(rejected),
+        results=results,
     )
 
 

@@ -11,12 +11,14 @@ from __future__ import annotations
 import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import status
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
-from app.errors import ApiError
+from app.errors import ApiError, describe_validation_error
 from app.events import LEVEL_ERROR, LEVEL_INFO, LEVEL_WARN, EventBus
 from app.models import ApiKey, Device, EnrolmentToken, Message
 from app.repositories import (
@@ -31,6 +33,7 @@ from app.schemas import (
     DeviceOut,
     MessageCreate,
     MessageOut,
+    MessageResult,
 )
 from app.security import (
     API_KEY_PREFIX,
@@ -41,6 +44,20 @@ from app.security import (
     hash_secret,
     normalize_enrolment_code,
 )
+
+
+def _readable_uuid(payload: Any) -> uuid.UUID | None:
+    """The message id, if this payload has one that parses.
+
+    A rejected message is matched back to the client's own row by id, so it is
+    worth salvaging even from a payload that is otherwise unusable.
+    """
+    if not isinstance(payload, dict):
+        return None
+    try:
+        return uuid.UUID(str(payload.get("id")))
+    except (ValueError, TypeError):
+        return None
 
 
 class DeviceService:
@@ -294,8 +311,43 @@ class MessageService:
             await self._announce(message)
         return message, created
 
-    async def ingest_batch(self, device: Device, payloads: list[MessageCreate]) -> tuple[int, int]:
+    @staticmethod
+    def parse_batch(payloads: list[Any]) -> tuple[list[tuple[int, MessageCreate]], list[MessageResult]]:
+        """Split a batch into the messages that can be stored and those that cannot.
+
+        Validating per message is the whole point: one unacceptable message
+        used to reject every message it travelled with, and the response could
+        not say which one was at fault, so the client had to find out by
+        re-uploading them one at a time.
+        """
+        valid: list[tuple[int, MessageCreate]] = []
+        rejected: list[MessageResult] = []
+        for index, payload in enumerate(payloads):
+            try:
+                valid.append((index, MessageCreate.model_validate(payload)))
+            except ValidationError as error:
+                rejected.append(
+                    MessageResult(
+                        index=index,
+                        # Only if the id itself survived; it is what a client
+                        # matches the verdict back to its own row by.
+                        id=_readable_uuid(payload),
+                        status="rejected",
+                        error=describe_validation_error(error, prefix=f"messages.{index}"),
+                    )
+                )
+        return valid, rejected
+
+    async def ingest_batch(
+        self, device: Device, payloads: list[MessageCreate]
+    ) -> tuple[int, int, list[bool]]:
+        """Store a batch, reporting per message whether it was new.
+
+        The third element is aligned with `payloads`, so a caller can tell a
+        client which of its messages were stored and which it had already sent.
+        """
         fresh: list[Message] = []
+        created_flags: list[bool] = []
         for payload in payloads:
             message, created = await self.messages.insert_if_absent(
                 message_id=payload.id,
@@ -304,6 +356,7 @@ class MessageService:
                 body=payload.body,
                 received_at=payload.received_at,
             )
+            created_flags.append(created)
             if created:
                 fresh.append(message)
         await self.session.commit()
@@ -323,7 +376,7 @@ class MessageService:
             received=len(payloads),
             stored=len(fresh),
         )
-        return len(fresh), len(payloads) - len(fresh)
+        return len(fresh), len(payloads) - len(fresh), created_flags
 
     async def _announce(self, message: Message) -> None:
         frame = MessageOut.model_validate(message).model_dump(mode="json")
