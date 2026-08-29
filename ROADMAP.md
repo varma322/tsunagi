@@ -232,7 +232,8 @@ Explicit **non-goals for the MVP**, revisited after v1.0:
 - Multi-user organizations / role-based access
 - Contact synchronization
 - End-to-end encryption of message bodies at rest
-- Webhooks for third-party integrations
+- ~~Webhooks for third-party integrations~~ — shipped, see
+  `POST /api/v1/webhooks`
 - ~~Export / backup tooling (JSON, CSV)~~ — shipped, see
   `GET /api/v1/messages/export`
 

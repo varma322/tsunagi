@@ -51,6 +51,35 @@ export interface MessagePage {
   messages: Message[];
 }
 
+/** Events a webhook can subscribe to. Mirrors WebhookEvent in schemas.py. */
+export type WebhookEvent = "message.new" | "device.status";
+
+export interface Webhook {
+  id: string;
+  url: string;
+  description: string | null;
+  events: string[];
+  enabled: boolean;
+  created_at: string;
+  disabled_at: string | null;
+  last_delivery_at: string | null;
+  last_status: number | null;
+  last_error: string | null;
+  /** Consecutive failures. Non-zero means it is failing now, not that it did. */
+  failure_count: number;
+}
+
+/** Only ever returned by create: the signing secret is shown once. */
+export interface CreatedWebhook extends Webhook {
+  secret: string;
+}
+
+export interface WebhookTestResult {
+  delivered: boolean;
+  status: number | null;
+  error: string | null;
+}
+
 export interface ApiKey {
   id: string;
   name: string;
@@ -249,6 +278,30 @@ export const api = {
     c: Credentials,
     params: { query: string; sender?: string; limit?: number; offset?: number },
   ) => request<MessagePage>(c, `/api/v1/messages/search${query(params)}`),
+
+  listWebhooks: (c: Credentials) =>
+    request<{ webhooks: Webhook[] }>(c, "/api/v1/webhooks").then((r) => r.webhooks),
+
+  createWebhook: (
+    c: Credentials,
+    body: { url: string; description?: string | null; events: WebhookEvent[] },
+  ) =>
+    request<CreatedWebhook>(c, "/api/v1/webhooks", {
+      method: "POST",
+      body: JSON.stringify({ ...body, description: body.description || null }),
+    }),
+
+  setWebhookEnabled: (c: Credentials, id: string, enabled: boolean) =>
+    request<Webhook>(c, `/api/v1/webhooks/${id}/enabled`, {
+      method: "POST",
+      body: JSON.stringify({ enabled }),
+    }),
+
+  testWebhook: (c: Credentials, id: string) =>
+    request<WebhookTestResult>(c, `/api/v1/webhooks/${id}/test`, { method: "POST" }),
+
+  deleteWebhook: (c: Credentials, id: string) =>
+    request<void>(c, `/api/v1/webhooks/${id}`, { method: "DELETE" }),
 
   listDevices: (c: Credentials) =>
     request<{ devices: Device[] }>(c, "/api/v1/devices").then((r) => r.devices),

@@ -668,3 +668,93 @@ Client → server:
 Delivery is best-effort (backed by Redis pub/sub); clients that need a gapless
 record should reconcile with `GET /api/v1/messages?after=<last_seen_at>` after
 reconnecting. PostgreSQL is always the source of truth.
+
+---
+
+## Webhooks
+
+An endpoint this server calls when something happens, for integrations with no
+browser to hold a WebSocket open and no reason to poll. Admin scope throughout.
+
+### Register
+
+```http
+POST /api/v1/webhooks
+```
+
+```json
+{
+  "url": "https://example.com/tsunagi",
+  "description": "ticketing system",
+  "events": ["message.new"]
+}
+```
+
+`events` defaults to `["message.new"]`; the full set is `message.new` and
+`device.status`. Only the URL scheme is validated — which hosts are reachable is
+the operator's business on a server they run themselves, and refusing loopback
+would break the most common integration there is, a script on the same box.
+
+Responds `201` with the webhook **and its signing secret**, which is shown once
+and never again. Unlike an API key the secret is stored as issued rather than
+hashed: it is not a credential presented to us but one we sign with, so the
+server has to keep it.
+
+### Deliveries
+
+Each delivery is a `POST` with this body:
+
+```json
+{
+  "event": "message.new",
+  "delivered_at": "2026-08-29T15:12:31+00:00",
+  "data": { "id": "6f1c...", "sender": "+15550001111", "body": "…" }
+}
+```
+
+`data` is the same object the WebSocket carries for that event.
+
+| Header | Meaning |
+|---|---|
+| `X-Tsunagi-Event` | The event name |
+| `X-Tsunagi-Delivery` | Unique id for this attempt |
+| `X-Tsunagi-Timestamp` | Unix seconds, covered by the signature |
+| `X-Tsunagi-Signature` | `sha256=` + HMAC-SHA256 of `timestamp.body` |
+
+Verify it before trusting the body:
+
+```python
+import hashlib, hmac
+
+expected = "sha256=" + hmac.new(
+    secret.encode(), f"{timestamp}.".encode() + raw_body, hashlib.sha256
+).hexdigest()
+if not hmac.compare_digest(expected, signature_header):
+    raise ValueError("not from Tsunagi")
+```
+
+The timestamp is inside the signature so a captured delivery cannot be replayed
+forever; reject one that is too old for you.
+
+**Delivery is best-effort.** A delivery is retried up to three times when the
+endpoint cannot be reached or answers `5xx`/`429`, and not at all on any other
+`4xx` — that is the receiver saying it understood and refused. Twenty
+consecutive failures switch the webhook off, so a dead endpoint stops costing
+every message a timeout; turning it back on resets the count. The database
+remains the record of what arrived: a webhook that missed something is not a
+message that was lost.
+
+### Manage
+
+```http
+GET    /api/v1/webhooks                  # list, without secrets
+POST   /api/v1/webhooks/{id}/enabled     # {"enabled": false}
+POST   /api/v1/webhooks/{id}/test        # send one now, inline
+DELETE /api/v1/webhooks/{id}
+```
+
+`test` sends a signed `webhook.test` delivery immediately and answers with what
+happened — `{"delivered": true, "status": 200, "error": null}` — rather than
+queueing it, because the operator asking is asking about right now. A failed
+test never switches the webhook off.
+

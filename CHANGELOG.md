@@ -15,6 +15,18 @@ All notable changes to Tsunagi. Format follows
   chunks, so exporting a year of messages does not mean holding a year of
   messages in memory, and CSV is rendered through the `csv` module because
   message bodies contain commas, quotes and newlines.
+- **Webhooks.** Register an endpoint under `POST /api/v1/webhooks` and this
+  server calls it when a message arrives or a device's status changes, so an
+  integration with no browser open does not have to poll. Each delivery is
+  signed with a per-webhook secret over `timestamp.body`, which is what lets a
+  receiver tell a real delivery from anything else that finds the URL, and the
+  timestamp is inside the signature so a captured one cannot be replayed
+  forever. Retried on a `5xx` or an unreachable endpoint, never on another
+  `4xx`; twenty consecutive failures switch the webhook off rather than costing
+  every message a timeout. Delivered from a bounded worker pool over `urllib`,
+  so a backlog upload cannot open a connection per message and no production
+  deployment gains an HTTP-client dependency. The dashboard has a Webhooks page
+  with a test button that reports what the endpoint actually answered.
 
 ## [1.0.2] — 2026-08-29
 

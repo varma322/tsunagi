@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import {
   Cable,
   KeyRound,
+  Webhook,
   LayoutDashboard,
   LogOut,
   MessageSquareText,
@@ -18,6 +19,7 @@ const NAV = [
   { to: "/messages", label: "Messages", icon: MessageSquareText, adminOnly: false },
   { to: "/devices", label: "Devices", icon: Smartphone, adminOnly: false },
   { to: "/keys", label: "API Keys", icon: KeyRound, adminOnly: true },
+  { to: "/webhooks", label: "Webhooks", icon: Webhook, adminOnly: true },
   { to: "/events", label: "Events", icon: ScrollText, adminOnly: true },
   { to: "/settings", label: "Settings", icon: Settings, adminOnly: false },
 ];

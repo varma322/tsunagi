@@ -283,3 +283,40 @@ import existing inbox history.
 - Timestamps are ISO-8601 UTC with a `Z` suffix.
 - Keys can be revoked instantly by the server owner, and revocation takes effect
   on the next request.
+
+---
+
+## Being told, instead of asking
+
+Polling and the WebSocket both need your side to stay connected. A webhook is
+the other direction: Tsunagi calls you.
+
+```bash
+curl -X POST https://sms.allbluesourcing.com/api/v1/webhooks   -H "Authorization: Bearer $ADMIN_KEY"   -H "Content-Type: application/json"   -d '{"url": "https://example.com/tsunagi", "events": ["message.new"]}'
+```
+
+Needs an **admin** key — a user-scope key cannot register one. The response
+carries a `secret`, shown once. Every delivery is signed with it, so check the
+signature before trusting the body:
+
+```python
+import hashlib, hmac
+
+def verify(secret: str, headers, raw_body: bytes) -> bool:
+    timestamp = headers["X-Tsunagi-Timestamp"]
+    expected = "sha256=" + hmac.new(
+        secret.encode(), f"{timestamp}.".encode() + raw_body, hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, headers["X-Tsunagi-Signature"])
+```
+
+Answer `2xx` quickly and do the work afterwards: a delivery that times out is
+retried, and one your endpoint refuses with a `4xx` is not retried at all.
+Twenty consecutive failures switch the webhook off, so a broken endpoint stops
+costing every message a timeout — the dashboard's Webhooks page shows the count
+and the last error, and `POST /api/v1/webhooks/{id}/test` sends one on demand
+and tells you what came back.
+
+Delivery is best-effort. The database is still the record: if you need to be
+certain you have everything, reconcile with
+`GET /api/v1/messages?after=<the last one you stored>`.

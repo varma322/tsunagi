@@ -79,6 +79,41 @@ Indexes:
 CREATE INDEX idx_devices_last_seen ON devices (last_seen DESC);
 ```
 
+### `webhooks`
+
+An HTTP endpoint told about events as they happen.
+
+```sql
+CREATE TABLE webhooks (
+    id               UUID PRIMARY KEY,
+    url              VARCHAR(2048) NOT NULL,
+    description      VARCHAR(120),
+    secret           VARCHAR(128)  NOT NULL,   -- signing key, stored as issued
+    events           VARCHAR(200)  NOT NULL,   -- comma-separated event names
+    created_at       TIMESTAMPTZ   NOT NULL,
+    disabled_at      TIMESTAMPTZ,              -- NULL = active
+    deleted_at       TIMESTAMPTZ,
+    last_delivery_at TIMESTAMPTZ,
+    last_status      INTEGER,                  -- HTTP status of the last attempt
+    last_error       VARCHAR(500),
+    failure_count    INTEGER       NOT NULL    -- consecutive; reset by a success
+);
+```
+
+`secret` is stored as issued rather than hashed, which is the opposite of
+`api_keys.key_hash` and deliberate: an API key is a credential presented to this
+server, so only a hash is needed to check it, while a webhook secret is one this
+server signs outgoing deliveries with and therefore has to keep.
+
+`events` is a comma-separated string rather than a list column, which would mean
+JSON on PostgreSQL and text on SQLite for a field that is never queried into.
+The subscription match wraps both sides in commas so `message.new` cannot match
+a stored `message.new.extra`.
+
+`failure_count` is consecutive failures, not total: it answers "is this endpoint
+broken now", and twenty in a row set `disabled_at` so a dead endpoint stops
+costing every message a timeout.
+
 ### `messages`
 
 One row per synchronized SMS. The primary key is the **client-generated UUID**,

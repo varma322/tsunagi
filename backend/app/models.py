@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, Uuid
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, Uuid
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -147,3 +147,52 @@ class ApiKey(Base):
     )
     # Soft delete: revoked keys stay queryable so usage history remains auditable.
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class Webhook(Base):
+    """An HTTP endpoint told about events as they happen.
+
+    The dashboard already learns about events over the WebSocket, but that only
+    works while a browser is open. A webhook is how something without a browser
+    -- a script, a ticketing system, a home automation box -- finds out that an
+    SMS arrived without polling for it.
+    """
+
+    __tablename__ = "webhooks"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    #: Signing secret, stored as issued rather than hashed: unlike an API key it
+    #: is not a credential presented to us, it is one we sign with, so it has to
+    #: be recoverable. Shown to the operator once, at creation.
+    secret: Mapped[str] = mapped_column(String(128), nullable=False)
+    #: Comma-separated event names. A list column would mean JSON on PostgreSQL
+    #: and a string on SQLite, for a field that never needs to be queried into.
+    events: Mapped[str] = mapped_column(String(200), nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow
+    )
+    #: Set when an operator turns it off, or when it is disabled for failing.
+    disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # --- delivery health --------------------------------------------------
+    last_delivery_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    #: HTTP status of the last attempt, or null when it never got a response.
+    last_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    #: Consecutive failures. Reset by any success; a run of them switches the
+    #: webhook off rather than retrying a dead endpoint forever.
+    failure_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    @property
+    def is_active(self) -> bool:
+        return self.disabled_at is None and self.deleted_at is None
+
+    @property
+    def event_names(self) -> list[str]:
+        return [name for name in self.events.split(",") if name]

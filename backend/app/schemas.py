@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 
 
 def _ensure_utc(value: Any) -> Any:
@@ -220,6 +220,72 @@ class MessageBatchResponse(BaseModel):
     #: Present only for a partial request. Null means every message was stored
     #: or already present — the same guarantee a 200 carried before.
     results: list[MessageResult] | None = None
+
+
+# --- webhooks -------------------------------------------------------------
+
+
+#: What a webhook can subscribe to. Short on purpose: the bus also carries
+#: per-pass sync chatter and the internal event log, neither of which is worth
+#: waking somebody's server for.
+WebhookEvent = Literal["message.new", "device.status"]
+
+
+class WebhookCreateRequest(BaseModel):
+    url: str = Field(min_length=8, max_length=2048)
+    description: str | None = Field(default=None, max_length=120)
+    events: list[WebhookEvent] = Field(default=["message.new"], min_length=1)
+
+    @field_validator("url")
+    @classmethod
+    def _must_be_http(cls, value: str) -> str:
+        # Only the scheme is checked. Which hosts are reachable is the
+        # operator's business on a server they run themselves, and refusing
+        # loopback would break the most common integration there is: a script
+        # on the same box.
+        if not value.startswith(("http://", "https://")):
+            raise ValueError("must be an http:// or https:// URL")
+        return value
+
+
+class WebhookOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    url: str
+    description: str | None
+    events: list[str]
+    enabled: bool
+    created_at: UtcDatetime
+    disabled_at: UtcDatetime | None = None
+    last_delivery_at: UtcDatetime | None = None
+    last_status: int | None = None
+    last_error: str | None = None
+    #: Consecutive failures. Non-zero on an enabled webhook means it is failing
+    #: now, not that it once did.
+    failure_count: int = 0
+
+
+class CreatedWebhook(WebhookOut):
+    """Includes the signing secret, which is shown once and never again."""
+
+    secret: str
+
+
+class WebhookListResponse(BaseModel):
+    webhooks: list[WebhookOut]
+
+
+class WebhookEnabledRequest(BaseModel):
+    enabled: bool
+
+
+class WebhookTestResponse(BaseModel):
+    """The result of a delivery the operator asked for, sent there and then."""
+
+    delivered: bool
+    status: int | None = None
+    error: str | None = None
 
 
 # --- api keys -------------------------------------------------------------

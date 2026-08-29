@@ -7,6 +7,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { DevicesPage } from "./pages/DevicesPage";
 import { EventsPage } from "./pages/EventsPage";
 import { KeysPage } from "./pages/KeysPage";
+import { WebhooksPage } from "./pages/WebhooksPage";
 import { LandingPage } from "./pages/LandingPage";
 import { MessagesPage } from "./pages/MessagesPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -40,6 +41,7 @@ export default function App() {
 
           <Route element={<RequireAdmin />}>
             <Route path="/keys" element={<KeysPage />} />
+            <Route path="/webhooks" element={<WebhooksPage />} />
             <Route path="/events" element={<EventsPage />} />
           </Route>
         </Route>

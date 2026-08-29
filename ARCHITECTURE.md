@@ -201,6 +201,11 @@ SQLite so local development needs no database server.
 
 ### Real-Time Layer
 
+- **Webhooks** turn the same events into outbound HTTP for consumers with no
+  browser open. A dispatcher subscribes to the bus, matches events against
+  registered endpoints, and posts them from a bounded worker pool, so a phone
+  uploading a backlog cannot open a connection per message. Signed with a
+  per-webhook secret over `timestamp.body`.
 - **Redis pub/sub** fans out new-message, device-status, and system events.
   When `TSUNAGI_REDIS_URL` is unset an in-process bus is used instead, which is
   correct for a single worker; more than one worker requires Redis.
@@ -261,6 +266,8 @@ Screens:
   `unknown`, with the reason and when the phone last captured a message), last
   seen, registration time, revoke.
 - **API Keys** — create with scope, reveal once, revoke.
+- **Webhooks** — register an endpoint, choose its events, send a test delivery,
+  and see what the last one returned.
 - **Events** — live-streaming system log with level filter, pause, and clear;
   seeded from `GET /api/v1/events` and appended from the WebSocket.
 - **Settings** — connection details and sign-out.

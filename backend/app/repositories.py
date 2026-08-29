@@ -16,7 +16,7 @@ from sqlalchemy import Select, delete, func, select, text, tuple_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import ApiKey, Device, EnrolmentToken, Message, utcnow
+from app.models import ApiKey, Device, EnrolmentToken, Message, Webhook, utcnow
 
 
 class DeviceRepository:
@@ -385,3 +385,78 @@ class ApiKeyRepository:
             select(func.count()).select_from(ApiKey).where(ApiKey.revoked_at.is_(None))
         )
         return int(result.scalar_one())
+
+
+class WebhookRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get(self, webhook_id: uuid.UUID) -> Webhook | None:
+        webhook = await self.session.get(Webhook, webhook_id)
+        return webhook if webhook is not None and webhook.deleted_at is None else None
+
+    async def create(
+        self, *, url: str, secret: str, events: list[str], description: str | None
+    ) -> Webhook:
+        webhook = Webhook(
+            url=url, secret=secret, events=",".join(events), description=description
+        )
+        self.session.add(webhook)
+        await self.session.flush()
+        return webhook
+
+    async def list_all(self) -> list[Webhook]:
+        result = await self.session.execute(
+            select(Webhook)
+            .where(Webhook.deleted_at.is_(None))
+            .order_by(Webhook.created_at.desc())
+        )
+        return list(result.scalars())
+
+    async def subscribed_to(self, event: str) -> list[Webhook]:
+        """Active webhooks wanting this event.
+
+        The comma wrapping is what keeps `message.new` from matching a stored
+        `message.new.extra`, which a bare LIKE would.
+        """
+        result = await self.session.execute(
+            select(Webhook)
+            .where(Webhook.deleted_at.is_(None))
+            .where(Webhook.disabled_at.is_(None))
+            .where(("," + Webhook.events + ",").like(f"%,{event},%"))
+        )
+        return list(result.scalars())
+
+    async def set_enabled(self, webhook: Webhook, enabled: bool) -> None:
+        webhook.disabled_at = None if enabled else utcnow()
+        if enabled:
+            # Turning it back on is a statement that the endpoint is fixed;
+            # keeping the old count would switch it off again almost at once.
+            webhook.failure_count = 0
+        await self.session.flush()
+
+    async def delete(self, webhook: Webhook) -> None:
+        webhook.deleted_at = utcnow()
+        await self.session.flush()
+
+    async def record_attempt(
+        self,
+        webhook: Webhook,
+        *,
+        ok: bool,
+        status: int | None,
+        error: str | None,
+        failure_limit: int,
+    ) -> bool:
+        """Record one delivery. Returns True if this switched the webhook off."""
+        webhook.last_delivery_at = utcnow()
+        webhook.last_status = status
+        webhook.last_error = None if ok else (error or f"HTTP {status}")[:500]
+        webhook.failure_count = 0 if ok else webhook.failure_count + 1
+
+        disabled = False
+        if not ok and webhook.failure_count >= failure_limit and webhook.disabled_at is None:
+            webhook.disabled_at = utcnow()
+            disabled = True
+        await self.session.flush()
+        return disabled

@@ -339,6 +339,47 @@ def main() -> int:
         f"HTTP {status}",
     )
 
+    # --- webhooks ---------------------------------------------------------
+    # Pointed at the deployment's own nginx, which answers POST /health with a
+    # 405. That is the point: a status back means a real request left this
+    # server and reached another one, which no unit test can show.
+    status, created = request(
+        "POST",
+        f"{base}/api/v1/webhooks",
+        reader,
+        {"url": "http://nginx/health", "description": "smoke test", "events": ["message.new"]},
+    )
+    checks.record("register a webhook", status == 201, f"HTTP {status}")
+    checks.record(
+        "the signing secret is revealed once",
+        status == 201 and bool(created.get("secret")),
+        # The detail prints on a pass too, so it has to read as a fact rather
+        # than as the complaint it would be on a failure.
+        f"HTTP {status}",
+    )
+
+    if status == 201:
+        hook_id = created["id"]
+        status, listed = request("GET", f"{base}/api/v1/webhooks", reader)
+        mine = next(
+            (w for w in (listed or {}).get("webhooks", []) if w["id"] == hook_id), None
+        )
+        checks.record(
+            "the secret is not listed afterwards",
+            mine is not None and "secret" not in mine,
+            str(mine),
+        )
+
+        status, result = request("POST", f"{base}/api/v1/webhooks/{hook_id}/test", reader)
+        checks.record(
+            "a test delivery reaches a real endpoint",
+            status == 200 and result.get("status") is not None,
+            f"HTTP {status}: {result}",
+        )
+
+        status, _ = request("DELETE", f"{base}/api/v1/webhooks/{hook_id}", reader)
+        checks.record("delete a webhook", status == 204, f"HTTP {status}")
+
     # --- authorization ----------------------------------------------------
     status, _ = request("GET", f"{base}/api/v1/messages")
     checks.record("unauthenticated read is rejected", status == 401, f"HTTP {status}")

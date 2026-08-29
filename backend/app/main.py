@@ -11,8 +11,19 @@ from app.errors import register_error_handlers
 from app.events import build_event_bus
 from app.middleware import RateLimitMiddleware
 from app.ratelimit import RateLimiter, RedisRateLimiter
-from app.routers import devices, enrolments, events, keys, me, messages, stats, ws
+from app.routers import (
+    devices,
+    enrolments,
+    events,
+    keys,
+    me,
+    messages,
+    stats,
+    webhooks,
+    ws,
+)
 from app.services import ApiKeyService
+from app.webhooks import WebhookDispatcher
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("tsunagi")
@@ -58,12 +69,20 @@ async def lifespan(app: FastAPI):
             bootstrap_key,
         )
 
+    # Started after the bus and before the first request: it subscribes to the
+    # bus, and a webhook registered before it is running would simply miss
+    # whatever happened in between.
+    dispatcher = WebhookDispatcher(bus)
+    await dispatcher.start()
+    app.state.webhooks = dispatcher
+
     await bus.emit("SYSTEM_INIT", payload_version=__version__)
     logger.info("tsunagi backend %s ready", __version__)
 
     try:
         yield
     finally:
+        await dispatcher.close()
         await bus.close()
         await dispose_engine()
 
@@ -100,6 +119,7 @@ def create_app() -> FastAPI:
         keys.router,
         events.router,
         stats.router,
+        webhooks.router,
     ):
         app.include_router(router)
     app.include_router(ws.router)
