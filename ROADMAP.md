@@ -187,9 +187,14 @@ battery manager parking the app in the stopped state. What remains open:
 - **Enrolment codes are ~39 bits.** Safe because they are single-use and expire
   in minutes, and the API is rate limited — but they would be weak as a
   long-lived credential, so do not extend their TTL to days.
-- **R8/minification is disabled for the Android release build**
-  (`app/build.gradle.kts`). Enabling it needs keep rules for the Retrofit and
-  kotlinx-serialization models.
+
+Also closed: R8 is on for the release build, taking the APK from 13.4 MB to
+1.7 MB. The keep rules it needed were not the ones expected — Retrofit, Room,
+OkHttp and kotlinx.serialization all ship their own, and the one real failure
+was subtler: Retrofit takes a suspend function's return type from the generic
+signature of its Continuation, and R8 erases that to `Object` when the type
+argument is a response the app never reads. It fails at the first request, in
+the release build only. See `app/proguard-rules.pro`.
 
 Also closed: batch upload was all-or-nothing server-side, so one message the
 server would not accept rejected every message it travelled with, and the

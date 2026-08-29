@@ -54,10 +54,12 @@ android {
             if (hasSigningKey) {
                 signingConfig = signingConfigs.getByName("release")
             }
-            // R8 is off for 1.0: Room, Retrofit, and kotlinx.serialization all
-            // rely on reflection or generated code that needs keep rules, and
-            // shipping a subtly broken sync engine is worse than a larger APK.
-            isMinifyEnabled = false
+            // R8 was off for 1.0 on the assumption that Room, Retrofit and
+            // kotlinx.serialization would each need hand-written keep rules.
+            // They ship their own -- see proguard-rules.pro, which records
+            // what each one covers and what is left to us.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

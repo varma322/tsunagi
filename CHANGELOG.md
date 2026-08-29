@@ -42,6 +42,15 @@ All notable changes to Tsunagi. Format follows
 
 ### Changed
 
+- **R8 is enabled for the release build**, taking the APK from 13.4 MB to
+  1.7 MB. It was off for 1.0 on the assumption that Room, Retrofit and
+  kotlinx.serialization would each need hand-written keep rules; they ship their
+  own, and the only rule this project needs is for something else entirely.
+  Retrofit reads a suspend function's return type from the generic signature of
+  the Continuation it compiles into, and R8 erases that to `Object` when the
+  type argument is a response the app never reads — the call then fails at the
+  first request, in the release build only. `app/proguard-rules.pro` records
+  what each library covers so the rules are not re-added by hand.
 - The phone's idle check-in is now `POST /api/v1/devices/checkin` rather than
   `GET /api/v1/me`, and it runs on every pass rather than only when there is
   nothing to upload: a phone can be busy draining its queue and have already

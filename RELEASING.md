@@ -112,11 +112,23 @@ cannot be installed as upgrades, only as a fresh install after uninstalling.
 ```bash
 ./gradlew :app:assembleRelease
 # app/build/outputs/apk/release/app-release.apk
+# app/build/outputs/mapping/release/mapping.txt
 ```
+
+**Keep `mapping.txt` for the version you ship.** The release build is minified,
+so every class and method in a crash report from a user is renamed; without the
+mapping for that exact build, the stack trace is unreadable and cannot be
+recovered later.
 
 Install the APK on a real device and confirm the whole path works before
 publishing: grant SMS permission, enrol with a code from the dashboard, send
 yourself a message, and watch it land.
+
+This step matters more than it looks now that R8 is on. Everything reflective —
+Retrofit's proxies, kotlinx.serialization's generated serializers, Room's
+generated code, the worker WorkManager instantiates by name — compiles and unit
+tests clean, then fails on the first real request if a keep rule is missing.
+Only running the release build catches it.
 
 ## 5. Tag and publish
 
