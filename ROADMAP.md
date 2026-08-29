@@ -30,8 +30,8 @@ recovered rather than lost, stopped a quiet phone from reporting itself offline,
 and added installers for a VPS that already runs other services — see
 [CHANGELOG.md](CHANGELOG.md) and **Capture reliability** under Known Gaps.
 
-Verification currently in place: 79 backend tests (`cd backend && pytest`),
-36 Android unit tests (`gradlew :app:testDebugUnitTest`), 19 Android
+Verification currently in place: 91 backend tests (`cd backend && pytest`),
+42 Android unit tests (`gradlew :app:testDebugUnitTest`), 21 Android
 instrumented tests against real SQLite and a real SMS provider
 (`gradlew :app:connectedDebugAndroidTest`, needs a device or emulator),
 a frontend typecheck
@@ -166,9 +166,6 @@ battery manager parking the app in the stopped state. What remains open:
   diagnosed; the untested suspects are a message that never landed in the
   platform inbox for the sweep to find, and the watermark the sweep resumes
   from.
-- **A phone that has stopped capturing still reports healthy.** The heartbeat
-  proves the app can reach the server, not that it can still receive SMS, so a
-  permanently broken device looks identical to a quiet one on the dashboard.
 - **Batch upload is all-or-nothing server-side.** One message that fails
   validation rejects the whole request. The Android client isolates and
   quarantines the offender so this no longer blocks the queue, but the endpoint
@@ -198,7 +195,16 @@ battery manager parking the app in the stopped state. What remains open:
   (`app/build.gradle.kts`). Enabling it needs keep rules for the Retrofit and
   kotlinx-serialization models.
 
-The v1.0 hardening items are closed: rate limiting
+Closed since this section was written: a phone that had stopped capturing used
+to report healthy, because the heartbeat proved only that the app could reach
+the server. The phone now reports whether its SMS permissions are still granted,
+whether the last sweep could read the platform store, whether it is exempt from
+battery optimization, and when it last captured anything — so the dashboard can
+say `blocked` instead of showing a broken phone as merely quiet, and a
+transition raises an event. A quiet phone is still `ok`; its `last_captured_at`
+is what says it is quiet.
+
+The v1.0 hardening items are closed too: rate limiting
 ([`app/ratelimit.py`](backend/app/ratelimit.py)), local retention on the phone,
 TLS deployment ([deployment/TLS.md](deployment/TLS.md)), and the shared setup
 key, now replaced by single-use enrolment codes.

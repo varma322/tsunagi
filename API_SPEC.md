@@ -30,7 +30,7 @@ Three credential types share the same header:
 
 | Credential      | Issued by                     | Scope                                  |
 |-----------------|-------------------------------|----------------------------------------|
-| Device token    | `POST /devices/register`      | Upload messages, report status (device scope) |
+| Device token    | `POST /devices/register`      | Upload messages, report presence and capture health (device scope) |
 | API key         | Dashboard / API keys API      | Read messages (`user`), manage devices and keys (`admin`) |
 | Enrolment code  | `POST /enrolments` (admin)    | One device registration, then spent    |
 | Setup key       | `TSUNAGI_SETUP_KEY` config    | Device registration; legacy, off by default |
@@ -235,7 +235,14 @@ Requires user/admin scope. Response `200 OK`:
       "enabled": true,
       "last_seen": "2026-08-12T09:28:41Z",
       "created_at": "2026-08-01T14:02:11Z",
-      "disabled_at": null
+      "disabled_at": null,
+      "capture": "ok",
+      "capture_reported_at": "2026-08-12T09:28:41Z",
+      "capture_permitted": true,
+      "inbox_readable": true,
+      "battery_exempt": true,
+      "last_captured_at": "2026-08-12T09:11:03Z",
+      "last_swept_at": "2026-08-12T09:28:41Z"
     }
   ]
 }
@@ -250,6 +257,53 @@ device would be indistinguishable from a dead one; the window is wider than the
 15-minute floor Android imposes on background work, so one missed beat does not
 flip a healthy device to offline. `enabled` is `false` when an admin has
 switched it off. Revoked devices are omitted entirely.
+
+`capture` answers a different question from `status`, and the two can disagree:
+
+| Value | Meaning |
+|---|---|
+| `ok` | The phone reports it can still receive SMS. |
+| `blocked` | SMS permission was revoked, or the phone cannot read its SMS store. Nothing is being captured. |
+| `unknown` | The device has never reported — an app older than this field, not a device in trouble. |
+
+`status` cannot stand in for it. A phone answers the check-in as long as the app
+can run at all, which it does perfectly well after its SMS permission has been
+revoked: online, uploading nothing, capturing nothing. Where `capture` is `ok`,
+`last_captured_at` is what separates a phone that is merely quiet from one worth
+investigating.
+
+### Report Capture Health
+
+```http
+POST /api/v1/devices/checkin
+```
+
+Device scope. Sent by the phone on every sync pass, with or without messages.
+Presence is refreshed by any authenticated call; this carries what the server
+cannot work out for itself.
+
+```json
+{
+  "capture_permitted": true,
+  "inbox_readable": true,
+  "battery_exempt": false,
+  "last_captured_at": "2026-08-12T09:11:03Z",
+  "last_swept_at": "2026-08-12T09:28:41Z"
+}
+```
+
+`capture_permitted` is `RECEIVE_SMS` and `READ_SMS` still being granted;
+`inbox_readable` is whether the last inbox sweep could read the platform SMS
+store, which is a different fact from whether it found anything;
+`battery_exempt` is exemption from battery optimization, which does not block
+capture but allows the system to park the app where no broadcast is delivered.
+The two timestamps may be `null` on a phone that has captured nothing yet.
+
+Responds `200 OK` with the same device object `GET /devices` returns. A
+transition into or out of `blocked` raises a `DEVICE_CAPTURE_BLOCKED` or
+`DEVICE_CAPTURE_RESTORED` event; an unchanged report raises nothing, since a
+blocked phone reports every fifteen minutes and one event per pass would bury
+the transition.
 
 ### Turn a Device On or Off
 

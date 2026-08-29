@@ -30,7 +30,16 @@ CREATE TABLE devices (
     created_at  TIMESTAMPTZ   NOT NULL,
     last_seen   TIMESTAMPTZ,
     disabled_at TIMESTAMPTZ,                     -- NULL = switched on
-    revoked_at  TIMESTAMPTZ                      -- NULL = not revoked
+    revoked_at  TIMESTAMPTZ,                     -- NULL = not revoked
+
+    -- Capture health, reported by the phone. NULL until one new enough to
+    -- report checks in.
+    capture_reported_at TIMESTAMPTZ,
+    capture_permitted   BOOLEAN,                 -- RECEIVE_SMS and READ_SMS granted
+    inbox_readable      BOOLEAN,                 -- the last sweep could read the SMS store
+    battery_exempt      BOOLEAN,                 -- exempt from battery optimization
+    last_captured_at    TIMESTAMPTZ,             -- newest message the phone holds
+    last_swept_at       TIMESTAMPTZ              -- last successful inbox sweep
 );
 ```
 
@@ -40,10 +49,23 @@ CREATE TABLE devices (
 | `last_seen`   | Updated on every authenticated request from the device.      |
 | `disabled_at` | Reversible off switch an admin toggles. The device keeps its token and resumes when re-enabled. |
 | `revoked_at`  | Permanent. The device disappears from listings; its messages are retained. |
+| `capture_*`, `last_captured_at`, `last_swept_at` | What the phone says about its own ability to receive SMS. |
 
 Two separate columns rather than one status field: an admin pausing a phone and
 an admin retiring one for good are different intentions, and collapsing them
 would make "turn it back on" ambiguous.
+
+Nullable with no default, deliberately: an app older than the check-in reports
+none of them, and "has not said" has to stay distinguishable from "said no". A
+default of `true` would invent a reassurance no device ever gave.
+
+The capture columns exist because `last_seen` answers the wrong question. It
+proves the app can reach the server, which it can do perfectly well after its
+SMS permission has been revoked — so before these, a phone that had silently
+stopped capturing was indistinguishable from a phone nobody had texted. The API
+derives a `capture` field of `unknown` / `ok` / `blocked` from them, and
+`last_captured_at` is what separates an `ok` device that is merely quiet from
+one that is broken.
 
 The online/offline flag the API returns is **derived**, not stored: a device
 counts as online when `last_seen` falls within

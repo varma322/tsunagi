@@ -47,6 +47,8 @@ class BackfillTest {
         override fun recordBackfill(at: Long) {
             watermark = at
         }
+
+        override fun recordSweep(at: Long) = Unit
     }
 
     @Before
@@ -77,17 +79,24 @@ class BackfillTest {
         // On an inbox with nothing in the look-back window the comparison
         // below is 0 against 0, which proves nothing. Skip rather than pass:
         // a green run here has to mean deduplication was actually exercised.
-        assumeTrue("needs messages in the inbox to be meaningful", first > 0)
+        assumeTrue("needs messages in the inbox to be meaningful", first.recovered > 0)
 
         val second = repository.backfill()
 
-        assertEquals("a second sweep must recover nothing", 0, second)
+        assertEquals("a second sweep must recover nothing", 0, second.recovered)
         assertEquals(
             "the row count must not move on a repeat sweep",
             storedAfterFirst,
             database.messageDao().pendingCount(),
         )
-        assertEquals(first, storedAfterFirst)
+        assertEquals(first.recovered, storedAfterFirst)
+    }
+
+    @Test
+    fun aSweepOfTheRealProviderReportsItselfReadable() = runTest {
+        // The health the phone reports rests on this: a sweep that read the
+        // store says so, and only a sweep that could not says otherwise.
+        assertTrue("a granted permission must read as readable", repository.backfill().readable)
     }
 
     @Test
@@ -116,7 +125,12 @@ class BackfillTest {
 
     @Test
     fun theWatermarkAdvancesPastWhatWasRead() = runTest {
-        repository.backfill()
+        val sweep = repository.backfill()
+
+        // With nothing in the look-back window nothing was examined, and the
+        // watermark deliberately does not step over what it has not read — so
+        // there is no advance to assert on. Skip rather than pass.
+        assumeTrue("needs messages in the inbox to be meaningful", sweep.recovered > 0)
 
         val advanced = settings.watermark
         assertTrue("the sweep must record how far it read", advanced != null)

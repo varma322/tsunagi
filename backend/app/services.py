@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 from app.errors import ApiError
-from app.events import LEVEL_INFO, LEVEL_WARN, EventBus
+from app.events import LEVEL_ERROR, LEVEL_INFO, LEVEL_WARN, EventBus
 from app.models import ApiKey, Device, EnrolmentToken, Message
 from app.repositories import (
     ApiKeyRepository,
@@ -25,7 +25,13 @@ from app.repositories import (
     EnrolmentRepository,
     MessageRepository,
 )
-from app.schemas import MessageCreate, MessageOut
+from app.schemas import (
+    CaptureStatus,
+    DeviceCheckInRequest,
+    DeviceOut,
+    MessageCreate,
+    MessageOut,
+)
 from app.security import (
     API_KEY_PREFIX,
     as_utc,
@@ -109,6 +115,108 @@ class DeviceService:
                 device_id=str(device.id),
             )
         return device, token
+
+    def capture_status(self, device: Device) -> CaptureStatus:
+        """Whether this device can still receive SMS.
+
+        Deliberately separate from is_online. A phone answers the heartbeat as
+        long as the app can run at all, which says nothing about whether the
+        platform will still hand it a message — the case this exists for is a
+        revoked SMS permission, where the app keeps checking in and captures
+        nothing.
+        """
+        if device.capture_reported_at is None:
+            # An app older than the check-in. Reporting "ok" would invent a
+            # reassurance the device never gave.
+            return "unknown"
+        if not device.capture_permitted or not device.inbox_readable:
+            return "blocked"
+        return "ok"
+
+    def to_out(self, device: Device) -> DeviceOut:
+        return DeviceOut(
+            id=device.id,
+            name=device.name,
+            status=self.is_online(device),
+            enabled=device.is_active,
+            last_seen=device.last_seen,
+            created_at=device.created_at,
+            disabled_at=device.disabled_at,
+            capture=self.capture_status(device),
+            capture_reported_at=device.capture_reported_at,
+            capture_permitted=device.capture_permitted,
+            inbox_readable=device.inbox_readable,
+            battery_exempt=device.battery_exempt,
+            last_captured_at=device.last_captured_at,
+            last_swept_at=device.last_swept_at,
+        )
+
+    async def record_check_in(self, device: Device, report: DeviceCheckInRequest) -> Device:
+        """Store what a phone says about its own capture path.
+
+        Announced only on a change. A blocked device checks in every fifteen
+        minutes, and an event per pass would bury the transition that matters
+        in a log of identical lines.
+        """
+        before = self.capture_status(device)
+        await self.devices.record_capture(
+            device,
+            capture_permitted=report.capture_permitted,
+            inbox_readable=report.inbox_readable,
+            battery_exempt=report.battery_exempt,
+            last_captured_at=report.last_captured_at,
+            last_swept_at=report.last_swept_at,
+        )
+        await self.session.commit()
+
+        after = self.capture_status(device)
+        if after != before:
+            await self._announce_capture(device, before, after)
+        return device
+
+    async def _announce_capture(
+        self, device: Device, before: CaptureStatus, after: CaptureStatus
+    ) -> None:
+        if after == "blocked":
+            await self.bus.emit(
+                "DEVICE_CAPTURE_BLOCKED",
+                LEVEL_ERROR,
+                device_id=str(device.id),
+                name=device.name,
+                reason=self.capture_reason(device),
+            )
+        elif before == "blocked":
+            await self.bus.emit(
+                "DEVICE_CAPTURE_RESTORED",
+                LEVEL_INFO,
+                device_id=str(device.id),
+                name=device.name,
+            )
+        else:
+            # unknown -> ok, which is an app being upgraded rather than a
+            # device changing state. Nothing worth logging.
+            return
+
+        await self.bus.publish(
+            {
+                "type": "device.status",
+                "data": {
+                    "device_id": str(device.id),
+                    "status": self.is_online(device),
+                    "enabled": device.is_active,
+                    "capture": after,
+                },
+            }
+        )
+
+    @staticmethod
+    def capture_reason(device: Device) -> str | None:
+        """Why capture is blocked, in the words the dashboard shows."""
+        if device.capture_permitted is False:
+            return "SMS permission has been revoked on the device."
+        if device.inbox_readable is False:
+            return "The device cannot read its SMS inbox, so the sweep cannot recover a miss."
+        return None
 
     async def list_devices(self) -> list[Device]:
         return await self.devices.list_all()

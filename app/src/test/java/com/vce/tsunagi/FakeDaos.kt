@@ -8,6 +8,8 @@ import com.vce.tsunagi.data.local.SyncStatus
 import com.vce.tsunagi.data.local.SyncStatusCount
 import com.vce.tsunagi.data.remote.BatchRequest
 import com.vce.tsunagi.data.remote.BatchResponse
+import com.vce.tsunagi.data.remote.CheckInRequest
+import com.vce.tsunagi.data.remote.DeviceStatusResponse
 import com.vce.tsunagi.data.remote.HealthResponse
 import com.vce.tsunagi.data.remote.IdentityResponse
 import com.vce.tsunagi.data.remote.RegisterRequest
@@ -64,6 +66,8 @@ class FakeMessageDao : MessageDao {
             .take(limit)
 
     override suspend fun pendingCount(): Int = pendingBatch(Int.MAX_VALUE).size
+
+    override suspend fun newestReceivedAt(): Long? = rows.values.maxOfOrNull { it.receivedAt }
 
     override suspend fun markStatus(ids: List<String>, status: SyncStatus) {
         ids.forEach { id -> rows[id]?.let { rows[id] = it.copy(syncStatus = status) } }
@@ -149,6 +153,11 @@ open class FakeApi : TsunagiApi {
         IdentityResponse(kind = "device", scope = "device", name = "Test Phone", id = "device-1")
     }
 
+    val checkIns = mutableListOf<CheckInRequest>()
+    var checkInBehaviour: (CheckInRequest) -> DeviceStatusResponse = {
+        DeviceStatusResponse(id = "device-1", name = "Test Phone", enabled = true, capture = "ok")
+    }
+
     override suspend fun health(): HealthResponse = HealthResponse("ok", "1.0.0")
 
     override suspend fun heartbeat(authorization: String): IdentityResponse {
@@ -162,6 +171,14 @@ open class FakeApi : TsunagiApi {
     ): RegisterResponse {
         registerCalls++
         return registerBehaviour()
+    }
+
+    override suspend fun checkIn(
+        authorization: String,
+        body: CheckInRequest,
+    ): DeviceStatusResponse {
+        checkIns += body
+        return checkInBehaviour(body)
     }
 
     override suspend fun uploadBatch(

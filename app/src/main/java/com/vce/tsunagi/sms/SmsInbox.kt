@@ -4,6 +4,7 @@ import android.content.Context
 import android.provider.Telephony
 import android.util.Log
 import com.vce.tsunagi.data.InboxMessage
+import com.vce.tsunagi.data.InboxRead
 import com.vce.tsunagi.data.InboxSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -23,10 +24,10 @@ class SmsInbox(context: Context) : InboxSource {
 
     private val resolver = context.applicationContext.contentResolver
 
-    override suspend fun since(cutoff: Long, limit: Int): List<InboxMessage> =
+    override suspend fun since(cutoff: Long, limit: Int): InboxRead =
         withContext(Dispatchers.IO) { read(cutoff, limit) }
 
-    private fun read(cutoff: Long, limit: Int): List<InboxMessage> {
+    private fun read(cutoff: Long, limit: Int): InboxRead {
         val found = mutableListOf<InboxMessage>()
         try {
             resolver.query(
@@ -69,14 +70,16 @@ class SmsInbox(context: Context) : InboxSource {
             }
         } catch (error: SecurityException) {
             // READ_SMS revoked after it was granted. Reporting nothing found
-            // would advance the watermark past messages never examined.
+            // would advance the watermark past messages never examined, and
+            // would tell the server this phone is fine when it has just lost
+            // its only defence against a missed broadcast.
             Log.w(TAG, "cannot read the SMS inbox: permission denied")
-            return emptyList()
+            return InboxRead.Unavailable("SMS permission denied")
         } catch (error: Exception) {
             Log.e(TAG, "failed to read the SMS inbox", error)
-            return emptyList()
+            return InboxRead.Unavailable(error.message ?: error.javaClass.simpleName)
         }
-        return found
+        return InboxRead.Read(found)
     }
 
     private companion object {

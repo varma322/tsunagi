@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text, Uuid
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, Uuid
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -35,6 +35,28 @@ class Device(Base):
     # which is permanent.
     disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # --- capture health ---------------------------------------------------
+    # What the phone reports about its own ability to receive SMS, as opposed
+    # to its ability to reach the server. last_seen proves only the latter, so
+    # without these a phone whose SMS permission was revoked looks exactly like
+    # one that simply has not been texted.
+    #
+    # All null until a device new enough to report them checks in, which is why
+    # they are nullable rather than defaulted: "not reporting" and "reporting a
+    # problem" are different answers and must not collapse into one.
+    capture_reported_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    capture_permitted: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    inbox_readable: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    battery_exempt: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    #: Newest message the device holds, however it was captured.
+    last_captured_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    #: When the inbox sweep last completed, whether or not it found anything.
+    last_swept_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     @property
     def is_active(self) -> bool:

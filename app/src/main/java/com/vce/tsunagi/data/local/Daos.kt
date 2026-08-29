@@ -78,6 +78,19 @@ interface MessageDao {
     @Query("SELECT COUNT(*) FROM messages WHERE sync_status IN ('PENDING', 'FAILED')")
     suspend fun pendingCount(): Int
 
+    /**
+     * When the newest message held was received, or null on a phone that has
+     * captured nothing yet.
+     *
+     * Reported to the server so a device that has stopped capturing can be told
+     * apart from one nobody has texted. Retention prunes synced rows, so this
+     * is "newest still held" rather than "newest ever seen" — which is the
+     * useful reading anyway, since a phone capturing normally always holds the
+     * most recent message for a while.
+     */
+    @Query("SELECT MAX(received_at) FROM messages")
+    suspend fun newestReceivedAt(): Long?
+
     @Query("UPDATE messages SET sync_status = :status WHERE id IN (:ids)")
     suspend fun markStatus(ids: List<String>, status: SyncStatus)
 

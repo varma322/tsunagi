@@ -9,6 +9,12 @@ export interface Identity {
   id: string | null;
 }
 
+/**
+ * Whether a phone can still receive SMS — which `status` does not tell you.
+ * "unknown" means an app too old to report, not a device in trouble.
+ */
+export type CaptureStatus = "unknown" | "ok" | "blocked";
+
 export interface Device {
   id: string;
   name: string;
@@ -19,6 +25,14 @@ export interface Device {
   last_seen: string | null;
   created_at: string;
   disabled_at: string | null;
+  capture: CaptureStatus;
+  capture_reported_at: string | null;
+  capture_permitted: boolean | null;
+  inbox_readable: boolean | null;
+  battery_exempt: boolean | null;
+  /** Newest message the phone holds. Old on an "ok" device means quiet. */
+  last_captured_at: string | null;
+  last_swept_at: string | null;
 }
 
 export interface Message {

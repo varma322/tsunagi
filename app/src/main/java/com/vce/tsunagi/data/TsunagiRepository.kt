@@ -8,6 +8,7 @@ import com.vce.tsunagi.data.local.MessageEntity
 import com.vce.tsunagi.data.local.SyncStatus
 import com.vce.tsunagi.data.remote.ApiFactory
 import com.vce.tsunagi.data.remote.BatchRequest
+import com.vce.tsunagi.data.remote.CheckInRequest
 import com.vce.tsunagi.data.remote.MessageUpload
 import com.vce.tsunagi.data.remote.RegisterRequest
 import com.vce.tsunagi.data.remote.TsunagiApi
@@ -30,12 +31,29 @@ sealed interface SyncOutcome {
     data class Failure(val reason: String) : SyncOutcome
 }
 
+/** What one sweep of the platform inbox established. */
+data class SweepOutcome(
+    val recovered: Int,
+    /**
+     * Whether the platform store could be read at all. False rules nothing
+     * out: it means the safety net is down, not that there was nothing to
+     * catch — which is exactly the difference the server needs to hear about.
+     */
+    val readable: Boolean,
+) {
+    companion object {
+        /** A sweep that could not be run, or that failed part way through. */
+        val Unreadable = SweepOutcome(recovered = 0, readable = false)
+    }
+}
+
 class TsunagiRepository(
     private val deviceDao: DeviceDao,
     private val messageDao: MessageDao,
     private val settings: SyncSettings,
     private val apiProvider: (String) -> TsunagiApi = ApiFactory::create,
     private val inbox: InboxSource = InboxSource.Empty,
+    private val capability: CaptureCapabilitySource = CaptureCapabilitySource.Healthy,
 ) {
 
     fun observeDevice(): Flow<DeviceEntity?> = deviceDao.observe()
@@ -79,9 +97,11 @@ class TsunagiRepository(
      * against the platform's own copy instead of trusting that every broadcast
      * arrived.
      *
-     * Returns the number of messages recovered.
+     * Reports what it managed to establish, not just what it found: a sweep
+     * that could not read the store is a phone that has lost its safety net,
+     * and must not be reported as a phone with nothing to recover.
      */
-    suspend fun backfill(): Int {
+    suspend fun backfill(): SweepOutcome {
         val now = System.currentTimeMillis()
         val watermark = settings.snapshot().lastBackfillAt
             // A first sweep starts from a bounded look-back. Reading from zero
@@ -94,8 +114,18 @@ class TsunagiRepository(
         // behind one already read. The id check makes the overlap free.
         val cutoff = (watermark - BACKFILL_OVERLAP_MILLIS).coerceAtLeast(0)
 
-        val candidates = inbox.since(cutoff, BACKFILL_SCAN_LIMIT)
-        if (candidates.isEmpty()) return 0
+        val candidates = when (val read = inbox.since(cutoff, BACKFILL_SCAN_LIMIT)) {
+            is InboxRead.Read -> read.messages
+            is InboxRead.Unavailable -> {
+                Log.w(TAG, "inbox sweep could not read the platform store: ${read.reason}")
+                return SweepOutcome.Unreadable
+            }
+        }
+
+        // The store answered, which is the fact worth remembering even when it
+        // had nothing new in it.
+        settings.recordSweep(now)
+        if (candidates.isEmpty()) return SweepOutcome(recovered = 0, readable = true)
 
         var recovered = 0
         for (candidate in candidates) {
@@ -114,7 +144,7 @@ class TsunagiRepository(
                 "inbox sweep recovered $recovered message(s) the broadcast did not deliver",
             )
         }
-        return recovered
+        return SweepOutcome(recovered = recovered, readable = true)
     }
 
     /** True when the message was missing and has now been stored. */
@@ -155,12 +185,13 @@ class TsunagiRepository(
 
         // Before uploading, not after: a message recovered here should leave
         // on this pass rather than waiting for the next one.
-        try {
+        val sweep = try {
             backfill()
         } catch (error: Exception) {
             // The sweep is a safety net. If it fails, the messages the
             // broadcast did deliver must still go up.
             Log.e(TAG, "inbox sweep failed", error)
+            SweepOutcome.Unreadable
         }
 
         // A crash mid-upload can strand rows in UPLOADING; put them back in line.
@@ -232,15 +263,64 @@ class TsunagiRepository(
 
         prune(config.retentionDays)
 
+        // Every pass, whether or not anything was uploaded. Without it the
+        // server only hears from a phone that has traffic, so a healthy but
+        // quiet device is indistinguishable from a dead one — and a device
+        // switched off server-side would not find out until its next SMS. The
+        // report is what makes a phone that has stopped being able to capture
+        // distinguishable from one nobody has texted.
+        val problem = checkIn(api, device, sweep)
+
         if (uploaded == 0) {
-            // Nothing to upload, but still check in. Without this the server
-            // only ever hears from a phone that has traffic, so a healthy but
-            // quiet device is indistinguishable from a dead one — and a device
-            // switched off server-side would not find out until its next SMS.
-            heartbeat(api, device)?.let { return it }
+            problem?.let { return it }
             return SyncOutcome.Idle("No pending messages.")
         }
+
+        // Messages went up. A check-in that failed on top of that is worth a
+        // log line and another attempt next pass, but reporting the pass as a
+        // failure would misdescribe what happened to the messages.
+        if (problem != null) {
+            Log.w(TAG, "upload succeeded but the check-in did not: $problem")
+        }
         return SyncOutcome.Success(uploaded)
+    }
+
+    /**
+     * Tells the server what this phone can still do, and refreshes presence in
+     * the same call.
+     *
+     * Returns null when it succeeded, or the outcome to report.
+     */
+    private suspend fun checkIn(
+        api: TsunagiApi,
+        device: DeviceEntity,
+        sweep: SweepOutcome,
+    ): SyncOutcome? {
+        val capable = capability.snapshot()
+        val report = CheckInRequest(
+            capturePermitted = capable.permitted,
+            inboxReadable = sweep.readable,
+            batteryExempt = capable.batteryExempt,
+            lastCapturedAt = messageDao.newestReceivedAt()?.let(::asTimestamp),
+            lastSweptAt = settings.snapshot().lastSweptAt?.let(::asTimestamp),
+        )
+
+        return try {
+            api.checkIn(ApiFactory.bearer(device.token), report)
+            null
+        } catch (error: HttpException) {
+            if (error.code() == 404) {
+                // A server older than capture reporting. Uploads still work
+                // against it, so fall back to the bare heartbeat rather than
+                // failing a pass over a feature the server has never heard of.
+                Log.i(TAG, "server does not accept capture health; using heartbeat")
+                heartbeat(api, device)
+            } else {
+                handleHttpError(error, "check-in")
+            }
+        } catch (error: IOException) {
+            SyncOutcome.Retry("Network error: ${error.message}")
+        }
     }
 
     /** Returns null when the check-in succeeded, or the outcome to report. */
@@ -355,6 +435,8 @@ class TsunagiRepository(
             else -> SyncOutcome.Failure("Server refused $stage (HTTP $code).")
         }
     }
+
+    private fun asTimestamp(millis: Long): String = Instant.ofEpochMilli(millis).toString()
 
     private fun toUpload(message: MessageEntity) = MessageUpload(
         id = message.id,

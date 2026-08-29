@@ -1,6 +1,9 @@
 package com.vce.tsunagi
 
+import com.vce.tsunagi.data.CaptureCapability
+import com.vce.tsunagi.data.CaptureCapabilitySource
 import com.vce.tsunagi.data.InboxMessage
+import com.vce.tsunagi.data.InboxRead
 import com.vce.tsunagi.data.InboxSource
 import com.vce.tsunagi.data.SyncOutcome
 import com.vce.tsunagi.data.SyncSettings
@@ -48,6 +51,7 @@ class TsunagiRepositoryTest {
     private class FakeSettings(private var current: TsunagiSettings) : SyncSettings {
         var codeCleared = false
         var backfillWatermark: Long? = null
+        var sweptAt: Long? = null
 
         override fun snapshot(): TsunagiSettings = current
 
@@ -60,6 +64,11 @@ class TsunagiRepositoryTest {
             backfillWatermark = at
             current = current.copy(lastBackfillAt = at)
         }
+
+        override fun recordSweep(at: Long) {
+            sweptAt = at
+            current = current.copy(lastSweptAt = at)
+        }
     }
 
     private lateinit var settings: FakeSettings
@@ -67,6 +76,7 @@ class TsunagiRepositoryTest {
     private fun repository(
         config: TsunagiSettings = configured,
         inbox: InboxSource = InboxSource.Empty,
+        capability: CaptureCapabilitySource = CaptureCapabilitySource.Healthy,
     ): TsunagiRepository {
         settings = FakeSettings(config)
         return TsunagiRepository(
@@ -75,6 +85,7 @@ class TsunagiRepositoryTest {
             settings = settings,
             apiProvider = { api },
             inbox = inbox,
+            capability = capability,
         )
     }
 
@@ -175,25 +186,29 @@ class TsunagiRepositoryTest {
             "without a check-in the server never hears from a quiet phone and " +
                 "reports it offline forever",
             1,
-            api.heartbeats,
+            api.checkIns.size,
         )
     }
 
     @Test
-    fun `uploading counts as a check-in, so no extra request is made`() = runTest {
+    fun `a phone that uploaded still reports its health`() = runTest {
+        // Uploading refreshes last_seen by itself, so this used to be skipped.
+        // It no longer can be: a phone can be busy draining its queue and have
+        // already lost the permission that fills it, and health reported only
+        // when idle would go stale on exactly the devices worth watching.
         deviceDao.device = registeredDevice()
         seedPending(1)
 
         repository().sync()
 
         assertEquals(1, api.uploadedBatches.size)
-        assertEquals("the upload already refreshed last_seen", 0, api.heartbeats)
+        assertEquals(1, api.checkIns.size)
     }
 
     @Test
     fun `a check-in refused with 403 reports the device was switched off`() = runTest {
         deviceDao.device = registeredDevice()
-        api.heartbeatBehaviour = { throw httpError(403) }
+        api.checkInBehaviour = { throw httpError(403) }
 
         val outcome = repository().sync()
 
@@ -204,7 +219,7 @@ class TsunagiRepositoryTest {
     @Test
     fun `a check-in refused with 401 re-enrols`() = runTest {
         deviceDao.device = registeredDevice()
-        api.heartbeatBehaviour = { throw httpError(401) }
+        api.checkInBehaviour = { throw httpError(401) }
 
         val outcome = repository().sync()
 
@@ -216,11 +231,93 @@ class TsunagiRepositoryTest {
     fun `a failed check-in does not mask a successful upload`() = runTest {
         deviceDao.device = registeredDevice()
         seedPending(2)
-        api.heartbeatBehaviour = { throw httpError(500) }
+        api.checkInBehaviour = { throw httpError(500) }
 
         val outcome = repository().sync()
 
         assertEquals(SyncOutcome.Success(2), outcome)
+    }
+
+    @Test
+    fun `a server too old for capture health falls back to the heartbeat`() = runTest {
+        // Updating the app before the server must not start reporting failures
+        // for a feature the server has never heard of.
+        deviceDao.device = registeredDevice()
+        api.checkInBehaviour = { throw httpError(404) }
+
+        val outcome = repository().sync()
+
+        assertTrue(outcome is SyncOutcome.Idle)
+        assertEquals("presence still has to be reported somehow", 1, api.heartbeats)
+    }
+
+    // --- capture health --------------------------------------------------
+
+    @Test
+    fun `a healthy phone reports that it can still capture`() = runTest {
+        deviceDao.device = registeredDevice()
+        messageDao.insert(
+            MessageEntity(id = "m", sender = "+1555", body = "hi", receivedAt = 4_000L)
+        )
+
+        repository(inbox = inboxOf(InboxMessage("+1555", "hi", 4_000L, 4_000L))).sync()
+
+        val report = api.checkIns.single()
+        assertTrue(report.capturePermitted)
+        assertTrue(report.inboxReadable)
+        assertTrue(report.batteryExempt)
+        assertNotNull("the newest message is what says a phone is not silent", report.lastCapturedAt)
+    }
+
+    @Test
+    fun `a revoked SMS permission is reported`() = runTest {
+        // The case the whole check-in exists for: the app still runs, still
+        // answers, and captures nothing.
+        deviceDao.device = registeredDevice()
+
+        repository(
+            capability = CaptureCapabilitySource {
+                CaptureCapability(permitted = false, batteryExempt = true)
+            },
+        ).sync()
+
+        assertFalse(api.checkIns.single().capturePermitted)
+    }
+
+    @Test
+    fun `an unreadable inbox is reported as a broken sweep, not a quiet one`() = runTest {
+        deviceDao.device = registeredDevice()
+
+        repository(inbox = { _, _ -> InboxRead.Unavailable("SMS permission denied") }).sync()
+
+        assertFalse(
+            "an empty sweep and a refused sweep must not report the same thing",
+            api.checkIns.single().inboxReadable,
+        )
+    }
+
+    @Test
+    fun `battery optimization is reported even when capture works`() = runTest {
+        deviceDao.device = registeredDevice()
+
+        repository(
+            capability = CaptureCapabilitySource {
+                CaptureCapability(permitted = true, batteryExempt = false)
+            },
+        ).sync()
+
+        val report = api.checkIns.single()
+        assertTrue(report.capturePermitted)
+        assertFalse("an optimized app can be parked where no broadcast arrives", report.batteryExempt)
+    }
+
+    @Test
+    fun `a phone with no messages reports no capture time rather than a wrong one`() = runTest {
+        deviceDao.device = registeredDevice()
+
+        repository().sync()
+
+        assertNull(api.checkIns.single().lastCapturedAt)
     }
 
     @Test
@@ -337,7 +434,7 @@ class TsunagiRepositoryTest {
     // --- capture recovery ------------------------------------------------
 
     private fun inboxOf(vararg messages: InboxMessage) =
-        InboxSource { cutoff, _ -> messages.filter { it.storedAt > cutoff } }
+        InboxSource { cutoff, _ -> InboxRead.Read(messages.filter { it.storedAt > cutoff }) }
 
     /**
      * A repository whose sweep has already run once, so it reads from a fixed

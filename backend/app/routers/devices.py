@@ -2,10 +2,19 @@ import uuid
 
 from fastapi import APIRouter, status
 
-from app.deps import AdminDep, BusDep, ReaderDep, RegistrationDep, SessionDep, SettingsDep
+from app.deps import (
+    AdminDep,
+    BusDep,
+    DeviceDep,
+    ReaderDep,
+    RegistrationDep,
+    SessionDep,
+    SettingsDep,
+)
 from app.errors import not_found
 from app.repositories import DeviceRepository
 from app.schemas import (
+    DeviceCheckInRequest,
     DeviceEnabledRequest,
     DeviceListResponse,
     DeviceOut,
@@ -45,20 +54,30 @@ async def list_devices(
 ) -> DeviceListResponse:
     service = DeviceService(session, bus, settings)
     devices = await service.list_devices()
-    return DeviceListResponse(
-        devices=[
-            DeviceOut(
-                id=device.id,
-                name=device.name,
-                status=service.is_online(device),
-                enabled=device.is_active,
-                last_seen=device.last_seen,
-                created_at=device.created_at,
-                disabled_at=device.disabled_at,
-            )
-            for device in devices
-        ]
-    )
+    return DeviceListResponse(devices=[service.to_out(device) for device in devices])
+
+
+@router.post(
+    "/checkin",
+    response_model=DeviceOut,
+    summary="Report this device's capture health",
+)
+async def check_in(
+    payload: DeviceCheckInRequest,
+    device: DeviceDep,
+    session: SessionDep,
+    bus: BusDep,
+    settings: SettingsDep,
+) -> DeviceOut:
+    """Called by the phone on every sync pass, with or without messages.
+
+    The presence half of this is free — any authenticated device call refreshes
+    last_seen. The body is the part the server cannot work out for itself:
+    whether the phone can still be handed an SMS at all.
+    """
+    service = DeviceService(session, bus, settings)
+    await service.record_check_in(device, payload)
+    return service.to_out(device)
 
 
 @router.post(
@@ -81,15 +100,7 @@ async def set_device_enabled(
     service = DeviceService(session, bus, settings)
     await service.set_enabled(device, payload.enabled)
 
-    return DeviceOut(
-        id=device.id,
-        name=device.name,
-        status=service.is_online(device),
-        enabled=device.is_active,
-        last_seen=device.last_seen,
-        created_at=device.created_at,
-        disabled_at=device.disabled_at,
-    )
+    return service.to_out(device)
 
 
 @router.delete(

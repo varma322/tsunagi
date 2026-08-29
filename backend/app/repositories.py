@@ -58,6 +58,29 @@ class DeviceRepository:
         device.last_seen = utcnow()
         await self.session.flush()
 
+    async def record_capture(
+        self,
+        device: Device,
+        *,
+        capture_permitted: bool,
+        inbox_readable: bool,
+        battery_exempt: bool,
+        last_captured_at: datetime | None,
+        last_swept_at: datetime | None,
+    ) -> None:
+        """Store the device's own account of whether it can still receive SMS.
+
+        last_seen is not touched here: every authenticated device call already
+        refreshes it, and this one is no more proof of presence than any other.
+        """
+        device.capture_reported_at = utcnow()
+        device.capture_permitted = capture_permitted
+        device.inbox_readable = inbox_readable
+        device.battery_exempt = battery_exempt
+        device.last_captured_at = last_captured_at
+        device.last_swept_at = last_swept_at
+        await self.session.flush()
+
     async def revoke(self, device: Device) -> None:
         device.revoked_at = utcnow()
         await self.session.flush()

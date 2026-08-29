@@ -5,6 +5,7 @@ import android.content.Context
 import com.vce.tsunagi.data.SettingsStore
 import com.vce.tsunagi.data.TsunagiRepository
 import com.vce.tsunagi.data.local.TsunagiDatabase
+import com.vce.tsunagi.sms.PlatformCapability
 import com.vce.tsunagi.sms.SmsInbox
 import com.vce.tsunagi.sync.SyncScheduler
 
@@ -27,6 +28,7 @@ class AppContainer(context: Context) {
         messageDao = database.messageDao(),
         settings = settings,
         inbox = SmsInbox(context),
+        capability = PlatformCapability(context),
     )
 }
 

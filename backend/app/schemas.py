@@ -15,6 +15,11 @@ UtcDatetime = Annotated[datetime, BeforeValidator(_ensure_utc)]
 
 Scope = Literal["user", "admin"]
 
+#: Whether a device can still receive SMS, as distinct from whether it can
+#: reach the server. "unknown" means the device has never reported — an app
+#: older than this field, not a device in trouble.
+CaptureStatus = Literal["unknown", "ok", "blocked"]
+
 
 # --- errors ---------------------------------------------------------------
 
@@ -40,6 +45,26 @@ class DeviceRegisterResponse(BaseModel):
     token: str
 
 
+class DeviceCheckInRequest(BaseModel):
+    """What a phone reports about its own ability to capture SMS.
+
+    Sent on every sync pass. The server cannot derive any of this: from here a
+    phone that has been denied SMS permission and a phone nobody has texted
+    look the same.
+    """
+
+    #: RECEIVE_SMS and READ_SMS are both still granted.
+    capture_permitted: bool
+    #: The last sweep could read the platform SMS store. False means the sweep
+    #: ran and was refused, which is a broken safety net rather than a quiet one.
+    inbox_readable: bool
+    #: Exempt from battery optimization. Not required, but an optimized app can
+    #: be parked in the stopped state, where no SMS broadcast is delivered.
+    battery_exempt: bool
+    last_captured_at: UtcDatetime | None = None
+    last_swept_at: UtcDatetime | None = None
+
+
 class DeviceOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -52,6 +77,17 @@ class DeviceOut(BaseModel):
     last_seen: UtcDatetime | None
     created_at: UtcDatetime
     disabled_at: UtcDatetime | None = None
+
+    #: Derived from the fields below: can this device still capture SMS?
+    capture: CaptureStatus = "unknown"
+    capture_reported_at: UtcDatetime | None = None
+    capture_permitted: bool | None = None
+    inbox_readable: bool | None = None
+    battery_exempt: bool | None = None
+    #: Newest message the device holds. An "ok" device with an old timestamp
+    #: here is quiet; that is the distinction this endpoint exists to make.
+    last_captured_at: UtcDatetime | None = None
+    last_swept_at: UtcDatetime | None = None
 
 
 class DeviceListResponse(BaseModel):

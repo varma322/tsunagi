@@ -46,6 +46,29 @@ data class IdentityResponse(
     @SerialName("id") val id: String? = null,
 )
 
+/**
+ * What the phone reports about its own ability to capture SMS.
+ *
+ * The server can see that a phone is reachable; it cannot see whether the
+ * platform will still hand that phone a message. Only these say so.
+ */
+@Serializable
+data class CheckInRequest(
+    @SerialName("capture_permitted") val capturePermitted: Boolean,
+    @SerialName("inbox_readable") val inboxReadable: Boolean,
+    @SerialName("battery_exempt") val batteryExempt: Boolean,
+    @SerialName("last_captured_at") val lastCapturedAt: String? = null,
+    @SerialName("last_swept_at") val lastSweptAt: String? = null,
+)
+
+@Serializable
+data class DeviceStatusResponse(
+    @SerialName("id") val id: String,
+    @SerialName("name") val name: String,
+    @SerialName("enabled") val enabled: Boolean,
+    @SerialName("capture") val capture: String,
+)
+
 @Serializable
 data class HealthResponse(
     @SerialName("status") val status: String,
@@ -84,6 +107,18 @@ interface TsunagiApi {
     suspend fun heartbeat(
         @Header("Authorization") authorization: String,
     ): IdentityResponse
+
+    /**
+     * Reports capture health and refreshes presence in one call.
+     *
+     * Supersedes [heartbeat] on a server new enough to accept it; a 404 means
+     * an older server, which is a reason to fall back rather than to fail.
+     */
+    @POST("api/v1/devices/checkin")
+    suspend fun checkIn(
+        @Header("Authorization") authorization: String,
+        @Body body: CheckInRequest,
+    ): DeviceStatusResponse
 
     @POST("api/v1/messages/batch")
     suspend fun uploadBatch(

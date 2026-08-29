@@ -17,6 +17,22 @@ def _sqlite_url(path: Path) -> str:
     return f"sqlite+aiosqlite:///{path.as_posix()}"
 
 
+def _head_revision() -> str:
+    """The newest migration, read from the scripts rather than written here.
+
+    Hardcoding it would mean every migration failed these tests until someone
+    edited the number, which teaches the habit of editing the number.
+    """
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    from app.db import BACKEND_DIR
+
+    config = Config(str(BACKEND_DIR / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
+    return ScriptDirectory.from_config(config).get_current_head()
+
+
 def _with_database(path: Path, coro_factory):
     """Run a coroutine against a specific database file.
 
@@ -54,7 +70,7 @@ def test_a_fresh_database_is_created_and_stamped():
         assert "disabled_at" in {r[1] for r in con.execute("PRAGMA table_info(devices)")}
 
         version = con.execute("SELECT version_num FROM alembic_version").fetchone()[0]
-        assert version == "0003", "a fresh database must be stamped at head"
+        assert version == _head_revision(), "a fresh database must be stamped at head"
         con.close()
 
 
@@ -93,5 +109,8 @@ def test_a_tracked_database_is_migrated_forward():
 
         con = sqlite3.connect(path)
         assert "disabled_at" in {r[1] for r in con.execute("PRAGMA table_info(devices)")}
-        assert con.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "0003"
+        assert (
+            con.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+            == _head_revision()
+        )
         con.close()

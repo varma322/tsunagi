@@ -21,6 +21,13 @@ data class TsunagiSettings(
      * look-back rather than the whole of the phone's message history.
      */
     val lastBackfillAt: Long? = null,
+    /**
+     * When the sweep last read the platform store successfully. Distinct from
+     * [lastBackfillAt], which only moves when something was there to examine:
+     * this one answers "is the safety net still working", which is what the
+     * server is told.
+     */
+    val lastSweptAt: Long? = null,
 ) {
     val isConfigured: Boolean
         get() = serverUrl.isNotBlank() && deviceName.isNotBlank()
@@ -45,6 +52,9 @@ interface SyncSettings {
 
     /** Advance the inbox sweep watermark after a completed sweep. */
     fun recordBackfill(at: Long)
+
+    /** Note that the platform store could still be read, at [at]. */
+    fun recordSweep(at: Long)
 }
 
 /**
@@ -87,6 +97,10 @@ class SettingsStore(context: Context) : SyncSettings {
         get() = prefs.getLong(KEY_LAST_BACKFILL_AT, 0L).takeIf { it > 0L }
         set(value) = prefs.edit().putLong(KEY_LAST_BACKFILL_AT, value ?: 0L).apply()
 
+    var lastSweptAt: Long?
+        get() = prefs.getLong(KEY_LAST_SWEPT_AT, 0L).takeIf { it > 0L }
+        set(value) = prefs.edit().putLong(KEY_LAST_SWEPT_AT, value ?: 0L).apply()
+
     override fun snapshot(): TsunagiSettings = TsunagiSettings(
         serverUrl = serverUrl,
         deviceName = deviceName,
@@ -95,6 +109,7 @@ class SettingsStore(context: Context) : SyncSettings {
         lastSyncError = lastSyncError,
         retentionDays = retentionDays,
         lastBackfillAt = lastBackfillAt,
+        lastSweptAt = lastSweptAt,
     )
 
     fun observe(): Flow<TsunagiSettings> = callbackFlow {
@@ -128,6 +143,10 @@ class SettingsStore(context: Context) : SyncSettings {
         prefs.edit().putLong(KEY_LAST_BACKFILL_AT, at).apply()
     }
 
+    override fun recordSweep(at: Long) {
+        prefs.edit().putLong(KEY_LAST_SWEPT_AT, at).apply()
+    }
+
     fun recordSyncSuccess(at: Long) {
         prefs.edit()
             .putLong(KEY_LAST_SYNC_AT, at)
@@ -148,5 +167,6 @@ class SettingsStore(context: Context) : SyncSettings {
         const val KEY_LAST_SYNC_ERROR = "last_sync_error"
         const val KEY_RETENTION_DAYS = "retention_days"
         const val KEY_LAST_BACKFILL_AT = "last_backfill_at"
+        const val KEY_LAST_SWEPT_AT = "last_swept_at"
     }
 }

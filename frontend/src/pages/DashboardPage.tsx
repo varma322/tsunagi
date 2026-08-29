@@ -207,6 +207,17 @@ export function DashboardPage() {
                   <p className="mt-1 text-xs text-content-subtle">
                     Last seen {relativeTime(device.last_seen)}
                   </p>
+                  {device.capture === "blocked" && (
+                    // An online phone that captures nothing is the case this
+                    // whole signal exists for, and "Online" alone would read as
+                    // reassurance.
+                    <p className="mt-1 text-xs font-medium text-danger">
+                      Not capturing —{" "}
+                      {device.capture_permitted === false
+                        ? "SMS permission revoked"
+                        : "cannot read the SMS inbox"}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>

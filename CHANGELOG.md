@@ -4,6 +4,39 @@ All notable changes to Tsunagi. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **A phone that has stopped capturing SMS no longer reports itself healthy.**
+  `last_seen` proves the app can reach the server, which it does perfectly well
+  after its SMS permission has been revoked — so a phone capturing nothing was
+  indistinguishable from a phone nobody had texted. The app now reports, on
+  every sync pass, whether `RECEIVE_SMS` and `READ_SMS` are still granted,
+  whether the last inbox sweep could read the platform store, whether it is
+  exempt from battery optimization, and when it last captured a message. The
+  dashboard shows `ok`, `blocked` or `unknown` per device, with the reason, and
+  `last_captured_at` distinguishes a quiet phone from a broken one.
+- `POST /api/v1/devices/checkin` (device scope), and six columns on `devices`
+  holding what it reports. Migration `0004`. A transition into or out of
+  `blocked` raises `DEVICE_CAPTURE_BLOCKED` / `DEVICE_CAPTURE_RESTORED`; an
+  unchanged report raises nothing, since a blocked phone reports every fifteen
+  minutes.
+- The inbox sweep now distinguishes a store it could not read from a store with
+  nothing new in it. Both used to come back as an empty list, which meant a
+  revoked permission looked exactly like a quiet inbox — the same conflation as
+  above, one layer down.
+
+### Changed
+
+- The phone's idle check-in is now `POST /api/v1/devices/checkin` rather than
+  `GET /api/v1/me`, and it runs on every pass rather than only when there is
+  nothing to upload: a phone can be busy draining its queue and have already
+  lost the permission that fills it. Against a server too old to accept it, the
+  app falls back to the old heartbeat instead of reporting a failed pass.
+- A check-in that fails after messages went up no longer turns a successful
+  upload into a failed pass.
+
 ## [1.0.1] — 2026-08-29
 
 A capture-reliability release: most of what follows closes a way a received SMS

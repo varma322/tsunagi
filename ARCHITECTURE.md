@@ -192,6 +192,12 @@ SQLite so local development needs no database server.
 4. WebSocket connections and `/messages/wait` long-pollers subscribed to the
    event bus deliver the message in real time.
 5. Device `last_seen` is updated on every authenticated request.
+6. The phone also reports capture health on every sync pass
+   (`POST /devices/checkin`): whether its SMS permissions still hold, whether
+   the inbox sweep could read the platform store, and when it last captured
+   anything. `last_seen` proves the app can reach the server, which it can do
+   after losing the permission that lets it receive SMS at all — so presence
+   alone would show a phone capturing nothing as healthy.
 
 ### Real-Time Layer
 
@@ -250,7 +256,9 @@ Screens:
   messages arrive over the WebSocket without a refresh.
 - **Messages** — searchable, filterable inbox with debounced full-text search,
   sender and device filters, and pagination.
-- **Devices** — online/offline status, last seen, registration time, revoke.
+- **Devices** — online/offline status, capture health (`ok` / `blocked` /
+  `unknown`, with the reason and when the phone last captured a message), last
+  seen, registration time, revoke.
 - **API Keys** — create with scope, reveal once, revoke.
 - **Events** — live-streaming system log with level filter, pause, and clear;
   seeded from `GET /api/v1/events` and appended from the WebSocket.

@@ -197,6 +197,55 @@ def main() -> int:
         online = bool(entry and entry["status"])
     checks.record("device reports online", online, f"HTTP {status}")
 
+    # --- capture health ---------------------------------------------------
+    # Sent exactly as the phone sends it. A field renamed on one side and not
+    # the other is a 422 that would otherwise only appear on someone's phone.
+    status, _ = request(
+        "POST",
+        f"{base}/api/v1/devices/checkin",
+        device_headers,
+        {
+            "capture_permitted": True,
+            "inbox_readable": True,
+            "battery_exempt": False,
+            "last_captured_at": sent_at,
+            "last_swept_at": sent_at,
+        },
+    )
+    checks.record("device reports capture health", status == 200, f"HTTP {status}")
+
+    status, body = request("GET", f"{base}/api/v1/devices", reader)
+    entry = None
+    if status == 200:
+        entry = next((d for d in body["devices"] if d["id"] == device["device_id"]), None)
+    checks.record(
+        "a healthy phone reads as capturing",
+        bool(entry and entry.get("capture") == "ok"),
+        str(entry.get("capture") if entry else f"HTTP {status}"),
+    )
+
+    status, _ = request(
+        "POST",
+        f"{base}/api/v1/devices/checkin",
+        device_headers,
+        {
+            "capture_permitted": False,
+            "inbox_readable": True,
+            "battery_exempt": False,
+            "last_captured_at": sent_at,
+            "last_swept_at": sent_at,
+        },
+    )
+    entry = None
+    if status == 200:
+        _, body = request("GET", f"{base}/api/v1/devices", reader)
+        entry = next((d for d in body["devices"] if d["id"] == device["device_id"]), None)
+    checks.record(
+        "a phone that lost SMS permission reads as blocked",
+        bool(entry and entry.get("capture") == "blocked"),
+        str(entry.get("capture") if entry else f"HTTP {status}"),
+    )
+
     status, body = request("GET", query(base, "/api/v1/events", {"type": "MSG_RECV"}), reader)
     checks.record(
         "events recorded ingestion",
