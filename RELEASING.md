@@ -30,8 +30,13 @@ reversed, a scope that tightened, a configuration default that flipped.
 ```bash
 cd backend && .venv/Scripts/python -m pytest      # 79 tests
 cd frontend && npm run typecheck && npm run build
-./gradlew :app:testDebugUnitTest                  # 18 tests
+./gradlew :app:testDebugUnitTest                  # 36 tests
+./gradlew :app:connectedDebugAndroidTest          # 19 tests, needs a device
 ```
+
+The instrumented suite is the only check that runs the Room queries and the
+inbox sweep against real SQLite and a real SMS provider, so do not skip it for a
+release that touches capture.
 
 Verify migrations round-trip, not just apply:
 

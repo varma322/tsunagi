@@ -4,7 +4,13 @@ All notable changes to Tsunagi. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.1] — 2026-08-29
+
+A capture-reliability release: most of what follows closes a way a received SMS
+could fail to reach the server, or a way a working phone could look broken on
+the dashboard. There are no schema changes, so upgrading a server is a rebuild
+and a restart — but see **Changed** for one default that moves. The capture
+fixes are all in the app, so the APK must be reinstalled to get them.
 
 ### Fixed
 
@@ -32,6 +38,26 @@ All notable changes to Tsunagi. Format follows
 - A message whose body decoded as empty was silently discarded; it is now
   stored.
 - A message that failed to store no longer aborts the rest of its broadcast.
+- **A healthy but idle phone no longer reports "Offline" forever.** `last_seen`
+  advances only on an authenticated device call, and a phone with nothing to
+  upload made no call at all, so a quiet device read as offline and
+  `active_devices` undercounted it. A sync pass with nothing to send now checks
+  in, which also lets a disabled device find that out without waiting for the
+  next SMS. A `401` during a check-in re-enrols, as it does during an upload.
+- **`scripts/smoke_test.py` runs against a production install.** It imported
+  `httpx`, which ships only in `requirements-dev.txt`, so the verification step
+  at the end of the installer died on `ModuleNotFoundError`; it is now written
+  on `urllib` with no third-party imports. It also sends an explicit user agent,
+  because Cloudflare's browser-integrity check rejects `Python-urllib/*` with a
+  403 that reads like an auth failure. The app and dashboard were never
+  affected.
+- **`setup-vps.sh --skip-build` works on a fresh clone.** It looked for
+  `frontend/dist`, which is gitignored and therefore cannot exist yet. Pass a
+  directory or a tarball with `--dist` instead; bare `--skip-build` now explains
+  how to produce one.
+- **Updating a bare-metal install works.** The installer chowns the checkout to
+  the service user, so the documented `git pull` failed as root with "dubious
+  ownership". The directory is now declared trusted.
 
 ### Added
 
@@ -40,6 +66,37 @@ All notable changes to Tsunagi. Format follows
   only while the exemption is missing and re-checks it on return.
 - `QUARANTINED` sync status, surfaced in the UI, so a message that will never be
   uploaded is visible rather than silently absent.
+- `deployment/setup-vps.sh` — an installer for a VPS already serving other
+  sites. It binds the Compose stack to loopback and reverse-proxies through the
+  host nginx, validates the whole nginx config before reloading (unlinking its
+  own site if the test fails), and adds swap first, since a one-core box
+  OOM-kills the Vite build.
+- `deployment/setup-vps-baremetal.sh` — a Docker-free installer for a server
+  that already runs PostgreSQL and Redis. It reuses both rather than starting
+  duplicates, picks an unused Redis logical database so pub/sub cannot collide
+  with an existing broker, serves the dashboard as static files, and runs the
+  API under systemd on loopback.
+- `deployment/update.sh` — reinstalls dependencies only when requirements move,
+  dumps the database before a new migration, restarts, and says plainly when the
+  dashboard or the APK still needs rebuilding.
+- [API_GUIDE.md](API_GUIDE.md), a task-oriented companion to `API_SPEC.md`:
+  auth, filtering, both real-time options, errors, rate limits, and enrolling a
+  phone.
+- Receiver logging at each stage of capture — PDU count, per-part sender and
+  body length, assembled and stored counts — so a missed message can be
+  diagnosed. Metadata only; message contents are never logged.
+- Instrumented tests against real SQLite and the real SMS provider: the Room
+  queries the sweep depends on, the provider projection, and the sweep end to
+  end through the repository. On an emulator holding 195 messages, a first sweep
+  recovers all 195 and a second recovers none.
+
+### Changed
+
+- **`TSUNAGI_DEVICE_ONLINE_WINDOW_SECONDS` now defaults to `1800`, from `300`.**
+  Android will not schedule periodic work more often than every 15 minutes, and
+  Doze delays it further, so the old window marked a healthy phone offline
+  between beats. An existing deployment that sets this explicitly in its `.env`
+  keeps its own value and should raise it to at least `1800`.
 
 ## [1.0.0] — 2026-08-12
 
@@ -130,4 +187,5 @@ time — over TLS, with role-based access and single-use device enrolment.
 - R8/minification is disabled for the Android release build.
 - No instrumented end-to-end test of the Android app against a live server.
 
+[1.0.1]: https://github.com/you/tsunagi/releases/tag/v1.0.1
 [1.0.0]: https://github.com/you/tsunagi/releases/tag/v1.0.0

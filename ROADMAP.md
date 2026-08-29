@@ -11,7 +11,7 @@ tracks the path to a complete v1.0 release and beyond. See
 
 ## Current Status
 
-**v1.0.0 is released.** All five milestones are complete: an SMS captured on an
+**v1.0.1 is released.** All five milestones are complete: an SMS captured on an
 Android device is stored locally, uploaded to the server, persisted, and visible
 in the web dashboard in real time — over TLS, with rate limiting, a local
 retention policy, admin/read-only roles, and single-use device enrolment.
@@ -25,8 +25,9 @@ retention policy, admin/read-only roles, and single-use device enrolment.
       ([DESIGN.md](tmp/frontend/tsunagi_core/DESIGN.md))
 - [x] TLS guide, CONTRIBUTING, and v1.0 release
 
-Since v1.0, capture has been reworked so a message the SMS broadcast never
-delivers is recovered rather than lost — see the unreleased section of
+1.0.1 reworked capture so a message the SMS broadcast never delivers is
+recovered rather than lost, stopped a quiet phone from reporting itself offline,
+and added installers for a VPS that already runs other services — see
 [CHANGELOG.md](CHANGELOG.md) and **Capture reliability** under Known Gaps.
 
 Verification currently in place: 79 backend tests (`cd backend && pytest`),
@@ -129,7 +130,7 @@ exercising the dashboard.
 6. ✅ Docker deployment works end-to-end.
 7. ✅ Documentation is complete.
 
-**All seven criteria are met. v1.0.0 is released** — see
+**All seven criteria are met. v1.0.0 shipped, and 1.0.1 hardened capture** — see
 [CHANGELOG.md](CHANGELOG.md), and [RELEASING.md](RELEASING.md) for how to cut
 the next one.
 
@@ -152,14 +153,19 @@ receiver, so a missed message left no trace anywhere.
 Every sync pass now sweeps the platform SMS inbox and stores what is missing,
 which turns any missed broadcast into a delay rather than a loss, and the app
 offers to exempt itself from battery optimization to prevent the miss in the
-first place. What remains open:
+first place. The sweep has since run on a physical phone through roughly two
+weeks of ordinary use (13–29 August 2026) and recovered what the broadcast
+dropped, which is the check an emulator could not make: instrumented tests
+prove deduplication holds against real provider data — 195 messages recovered
+on a first sweep, zero on a repeat — but only a real phone exercises a vendor
+battery manager parking the app in the stopped state. What remains open:
 
-- **The sweep has not been verified on a physical phone.** It is covered by
-  instrumented tests against a real SMS provider on an emulator — 195 messages
-  recovered on a first sweep and zero on a repeat, which is what proves
-  deduplication holds against provider data rather than against a fixture. What
-  an emulator cannot reproduce is the failure that started this: a vendor
-  battery manager parking the app in the stopped state.
+- **Three to five messages were still lost over that period.** Small in volume,
+  and judged acceptable for now, but the sweep exists precisely so that a miss
+  becomes a delay instead of a loss, so it is not yet airtight. Nothing has been
+  diagnosed; the untested suspects are a message that never landed in the
+  platform inbox for the sweep to find, and the watermark the sweep resumes
+  from.
 - **A phone that has stopped capturing still reports healthy.** The heartbeat
   proves the app can reach the server, not that it can still receive SMS, so a
   permanently broken device looks identical to a quiet one on the dashboard.
@@ -171,13 +177,12 @@ first place. What remains open:
 ### Testing
 
 - **No automated end-to-end test of the Android app against a live server.**
-  The sync engine is unit-tested with fakes and verified by hand on a device.
-  Instrumented tests now cover the storage and capture layers against real
-  SQLite and a real SMS provider, but nothing drives the app against a running
-  backend.
-- **`GET /api/v1/me` has no backend test.** It is what lets an idle device
-  report that it is still alive, and nothing under `backend/tests/` exercises
-  it.
+  The sync engine is unit-tested with fakes, and the full path has been run by
+  hand against a live server for two weeks without a sync failure. Instrumented
+  tests cover the storage and capture layers against real SQLite and a real SMS
+  provider, but nothing drives the app against a running backend unattended, so
+  a regression in that path would only show up in field use — which is how the
+  lost messages noted above were noticed, and why they were not diagnosed.
 
 ### Everything else
 
