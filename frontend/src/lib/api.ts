@@ -195,6 +195,56 @@ export const api = {
     } = {},
   ) => request<MessagePage>(c, `/api/v1/messages${query(params)}`),
 
+  /**
+   * Downloads an export of everything matching the filters.
+   *
+   * Fetched rather than linked: the API is bearer-authenticated, and a plain
+   * anchor cannot carry the header. Returns the blob and the filename the
+   * server chose, so the caller does not have to invent one.
+   */
+  exportMessages: async (
+    c: Credentials,
+    params: {
+      format: "csv" | "json";
+      sender?: string;
+      device_id?: string;
+      after?: string;
+      before?: string;
+      query?: string;
+    },
+  ): Promise<{ blob: Blob; filename: string }> => {
+    let response: Response;
+    try {
+      response = await fetch(joinUrl(c.serverUrl, `/api/v1/messages/export${query(params)}`), {
+        headers: { Authorization: `Bearer ${c.apiKey}` },
+      });
+    } catch {
+      throw new ApiError(0, "network_error", "Could not reach the server.");
+    }
+
+    if (!response.ok) {
+      const text = await response.text();
+      let envelope: { error?: { code?: string; message?: string } } | null = null;
+      try {
+        envelope = text ? JSON.parse(text) : null;
+      } catch {
+        envelope = null;
+      }
+      throw new ApiError(
+        response.status,
+        envelope?.error?.code ?? "error",
+        envelope?.error?.message ?? `Export failed with HTTP ${response.status}.`,
+      );
+    }
+
+    return {
+      blob: await response.blob(),
+      filename:
+        /filename="([^"]+)"/.exec(response.headers.get("content-disposition") ?? "")?.[1] ??
+        `tsunagi-messages.${params.format}`,
+    };
+  },
+
   searchMessages: (
     c: Credentials,
     params: { query: string; sender?: string; limit?: number; offset?: number },

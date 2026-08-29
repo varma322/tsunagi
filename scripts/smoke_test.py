@@ -36,8 +36,13 @@ def request(
     headers: dict[str, str] | None = None,
     payload: object | None = None,
     timeout: float = 20.0,
+    raw: bool = False,
 ) -> tuple[int, object]:
-    """Returns (status, parsed body). Status 0 means the server was unreachable."""
+    """Returns (status, parsed body). Status 0 means the server was unreachable.
+
+    `raw` returns the body as text instead of parsing it, for the endpoints that
+    do not answer in JSON — the CSV export being the only one today.
+    """
     body = json.dumps(payload).encode() if payload is not None else None
     req = urllib.request.Request(url, data=body, method=method)
     req.add_header("Content-Type", "application/json")
@@ -47,14 +52,16 @@ def request(
 
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
-            raw = response.read().decode("utf-8")
-            return response.status, (json.loads(raw) if raw else None)
+            text = response.read().decode("utf-8")
+            if raw:
+                return response.status, text
+            return response.status, (json.loads(text) if text else None)
     except urllib.error.HTTPError as error:
-        raw = error.read().decode("utf-8", "replace")
+        text = error.read().decode("utf-8", "replace")
         try:
-            return error.code, (json.loads(raw) if raw else None)
+            return error.code, (json.loads(text) if text else None)
         except ValueError:
-            return error.code, raw
+            return error.code, text
     except (urllib.error.URLError, TimeoutError, OSError) as error:
         return 0, str(error)
 
@@ -239,6 +246,33 @@ def main() -> int:
     checks.record(
         "without opting in, one bad message still rejects the batch",
         status == 422,
+        f"HTTP {status}",
+    )
+
+    # --- export -----------------------------------------------------------
+    # Worth checking through a real deployment rather than only in tests: the
+    # export streams, and a reverse proxy sits between it and the client.
+    status, body = request(
+        "GET",
+        query(base, "/api/v1/messages/export", {"device_id": device["device_id"]}),
+        reader,
+        raw=True,
+    )
+    lines = [line for line in (body or "").splitlines() if line.strip()]
+    checks.record(
+        "csv export returns a header and every message",
+        status == 200 and lines and lines[0].startswith("id,device_id,sender") and len(lines) >= 3,
+        f"HTTP {status}, {len(lines)} line(s)",
+    )
+
+    status, body = request(
+        "GET",
+        query(base, "/api/v1/messages/export", {"device_id": device["device_id"], "format": "json"}),
+        reader,
+    )
+    checks.record(
+        "json export parses",
+        status == 200 and isinstance(body.get("messages"), list) and len(body["messages"]) >= 2,
         f"HTTP {status}",
     )
 

@@ -4,6 +4,18 @@ All notable changes to Tsunagi. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Message export.** `GET /api/v1/messages/export?format=csv|json` returns
+  everything matching the usual filters, oldest first, with no page limit, and
+  the dashboard's Messages page has CSV and JSON buttons that export exactly
+  what the filter chips describe. The response is streamed in keyset-paged
+  chunks, so exporting a year of messages does not mean holding a year of
+  messages in memory, and CSV is rendered through the `csv` module because
+  message bodies contain commas, quotes and newlines.
+
 ## [1.0.2] — 2026-08-29
 
 A phone that had stopped capturing SMS now says so, a batch upload can name the

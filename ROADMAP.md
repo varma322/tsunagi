@@ -233,7 +233,8 @@ Explicit **non-goals for the MVP**, revisited after v1.0:
 - Contact synchronization
 - End-to-end encryption of message bodies at rest
 - Webhooks for third-party integrations
-- Export / backup tooling (JSON, CSV)
+- ~~Export / backup tooling (JSON, CSV)~~ — shipped, see
+  `GET /api/v1/messages/export`
 
 ---
 

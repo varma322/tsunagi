@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Inbox, RefreshCw, Search, X } from "lucide-react";
+import { Download, Inbox, RefreshCw, Search, X } from "lucide-react";
 
-import { api, type Device } from "../lib/api";
+import { ApiError, api, type Device } from "../lib/api";
 import { useCredentials } from "../lib/auth";
 import { useApi } from "../lib/hooks";
 import { absoluteTime, count, relativeTime } from "../lib/format";
@@ -63,6 +63,41 @@ export function MessagesPage() {
   const to = Math.min(total, (page + 1) * PAGE_SIZE);
   const hasFilters = Boolean(search || deviceId || sender);
 
+  const [exporting, setExporting] = useState<"csv" | "json" | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  /**
+   * Exports what the filters currently select, not the page on screen — the
+   * filter chips above say what that is.
+   */
+  async function exportMessages(format: "csv" | "json") {
+    setExporting(format);
+    setExportError(null);
+    try {
+      const { blob, filename } = await api.exportMessages(credentials, {
+        format,
+        query: search || undefined,
+        device_id: deviceId || undefined,
+        sender: sender || undefined,
+      });
+      // The blob lives in this tab's memory, so the object URL has to be
+      // revoked once the download has taken it; leaving it holds the whole
+      // export until a reload.
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (caught) {
+      setExportError(
+        caught instanceof ApiError ? caught.message : "The export could not be downloaded.",
+      );
+    } finally {
+      setExporting(null);
+    }
+  }
+
   function clearFilters() {
     setSearchInput("");
     setSearch("");
@@ -81,11 +116,35 @@ export function MessagesPage() {
             : "Loading synchronized messages."
         }
         actions={
-          <Button variant="secondary" onClick={messages.reload}>
-            <RefreshCw className="size-4" aria-hidden /> Refresh
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => exportMessages("csv")}
+              disabled={exporting !== null}
+              title="Download every message matching the current filters"
+            >
+              <Download className="size-4" aria-hidden />
+              {exporting === "csv" ? "Exporting…" : "CSV"}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => exportMessages("json")}
+              disabled={exporting !== null}
+              title="Download every message matching the current filters"
+            >
+              <Download className="size-4" aria-hidden />
+              {exporting === "json" ? "Exporting…" : "JSON"}
+            </Button>
+            <Button variant="secondary" onClick={messages.reload}>
+              <RefreshCw className="size-4" aria-hidden /> Refresh
+            </Button>
+          </div>
         }
       />
+
+      {exportError && (
+        <p className="mb-4 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{exportError}</p>
+      )}
 
       <Card className="mb-4">
         <div className="flex flex-col gap-3 lg:flex-row">

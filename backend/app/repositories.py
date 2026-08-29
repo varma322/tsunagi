@@ -9,9 +9,10 @@ issues SQL directly."""
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncIterator
 from datetime import datetime
 
-from sqlalchemy import Select, delete, func, select, text, update
+from sqlalchemy import Select, delete, func, select, text, tuple_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -190,6 +191,43 @@ class MessageRepository:
             base.order_by(Message.received_at.desc(), Message.id).limit(limit).offset(offset)
         )
         return total, list(rows.scalars())
+
+    async def iter_filtered(
+        self,
+        *,
+        sender: str | None = None,
+        device_id: uuid.UUID | None = None,
+        after: datetime | None = None,
+        before: datetime | None = None,
+        query: str | None = None,
+        chunk: int = 1000,
+    ) -> AsyncIterator[list[Message]]:
+        """Every matching message, oldest first, a chunk at a time.
+
+        Paged by keyset rather than OFFSET: an export of a large table walks the
+        index once instead of re-scanning and discarding a growing prefix, and a
+        message arriving mid-export cannot shift rows onto a page already sent.
+        """
+        base = self._apply_filters(
+            select(Message), sender=sender, device_id=device_id, after=after, before=before
+        )
+        if query:
+            base = self._apply_search(base, query)
+
+        cursor: tuple[datetime, uuid.UUID] | None = None
+        while True:
+            statement = base.order_by(Message.received_at.asc(), Message.id.asc()).limit(chunk)
+            if cursor is not None:
+                statement = statement.where(
+                    tuple_(Message.received_at, Message.id) > cursor
+                )
+            rows = list((await self.session.execute(statement)).scalars())
+            if not rows:
+                return
+            yield rows
+            if len(rows) < chunk:
+                return
+            cursor = (rows[-1].received_at, rows[-1].id)
 
     async def list_since(
         self, *, since: datetime, sender: str | None = None, limit: int = 100

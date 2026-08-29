@@ -1,7 +1,10 @@
 import uuid
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Query, Response, status
+from fastapi.responses import StreamingResponse
 
 from app.deps import BusDep, DeviceDep, ReaderDep, SessionDep, SettingsDep
 from app.errors import ApiError
@@ -14,6 +17,10 @@ from app.schemas import (
     MessageResult,
     MessageWaitResponse,
 )
+from app.db import get_session_factory
+from app.export import FORMATS, filename
+from app import export as export_module
+from app.repositories import MessageRepository
 from app.services import MessageService
 
 router = APIRouter(prefix="/api/v1/messages", tags=["messages"])
@@ -90,6 +97,53 @@ async def upload_batch(
         duplicates=duplicates,
         rejected=len(rejected),
         results=results,
+    )
+
+
+@router.get(
+    "/export",
+    summary="Export messages as CSV or JSON",
+    response_class=StreamingResponse,
+    responses={200: {"content": {"text/csv": {}, "application/json": {}}}},
+)
+async def export_messages(
+    _principal: ReaderDep,
+    format: Literal["csv", "json"] = "csv",
+    sender: str | None = None,
+    device_id: uuid.UUID | None = None,
+    after: datetime | None = None,
+    before: datetime | None = None,
+    query: str | None = None,
+) -> StreamingResponse:
+    """Every message matching the filters, oldest first.
+
+    Takes the same filters as `GET /messages` but no `limit`: an export that
+    silently stopped at a page boundary would be worse than no export. The
+    response is streamed, so the server holds one chunk at a time rather than
+    the whole result.
+    """
+    render, media_type, _ = FORMATS[format]
+
+    async def stream() -> AsyncIterator[str]:
+        # Its own session, deliberately. The request-scoped one is closed when
+        # the endpoint returns, which for a streaming response is before the
+        # body has been produced.
+        async with get_session_factory()() as session:
+            chunks = MessageRepository(session).iter_filtered(
+                sender=sender,
+                device_id=device_id,
+                after=after,
+                before=before,
+                query=query,
+                chunk=export_module.CHUNK,
+            )
+            async for part in render(chunks):
+                yield part
+
+    return StreamingResponse(
+        stream(),
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename(format)}"'},
     )
 
 

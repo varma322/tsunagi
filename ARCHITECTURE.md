@@ -255,7 +255,8 @@ Screens:
   storage), 7-day message-volume chart, recent messages, device panel. New
   messages arrive over the WebSocket without a refresh.
 - **Messages** — searchable, filterable inbox with debounced full-text search,
-  sender and device filters, and pagination.
+  sender and device filters, and pagination. Exports what the filters select as
+  CSV or JSON, streamed from the server rather than assembled in memory.
 - **Devices** — online/offline status, capture health (`ok` / `blocked` /
   `unknown`, with the reason and when the phone last captured a message), last
   seen, registration time, revoke.

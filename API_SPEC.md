@@ -438,6 +438,38 @@ field existed.
 The batch size cap and the "at least one message" rule still apply to a partial
 request, and still answer `422`: those describe the request, not a message in it.
 
+### Export Messages
+
+```http
+GET /api/v1/messages/export
+```
+
+Requires user/admin scope. Takes the same filters as `GET /messages` — `sender`,
+`device_id`, `after`, `before`, `query` — and no `limit`: an export that
+silently stopped at a page boundary would be worse than no export.
+
+| Parameter | Values | Default |
+|---|---|---|
+| `format` | `csv`, `json` | `csv` |
+
+Messages come back **oldest first**, the opposite of the list endpoint: a file is
+read from the top, and a backup that starts at the newest message reads
+backwards. The response is streamed and carries
+`Content-Disposition: attachment` with a timestamped filename.
+
+```
+id,device_id,sender,body,received_at,created_at
+6f1c1c9e-...,8a2d...,+15550001111,"a body, quoted",2026-08-12T09:11:03+00:00,...
+```
+
+`format=json` returns `{"messages": [...]}` with the same objects `GET /messages`
+returns. There is no `total`: counting first would mean a second full scan to
+tell the caller something it learns by reading to the end.
+
+A large export is a large response — the server streams it a chunk at a time
+rather than building it in memory, but a client that buffers the whole body
+should expect to hold it.
+
 ### List Messages
 
 ```http
