@@ -7,10 +7,10 @@ and exposes them through a documented HTTP API, a WebSocket stream, and a web
 dashboard. It is built for people who want their messages archived, searchable,
 and available to their own scripts — without handing them to a third party.
 
-> **v1.0.2** — Android app, backend, and dashboard work end to end, with TLS,
+> **v1.1.0** — Android app, backend, and dashboard work end to end, with TLS,
 > rate limiting, local retention, admin/read-only roles, and single-use device
-> enrolment. 1.0.1 made capture survive a missed SMS broadcast; 1.0.2 makes a
-> phone that has stopped capturing say so. See [CHANGELOG.md](CHANGELOG.md) and
+> enrolment. 1.1 adds webhooks and CSV/JSON export, so messages can leave for
+> another system without it polling. See [CHANGELOG.md](CHANGELOG.md) and
 > [ROADMAP.md](ROADMAP.md).
 
 ---

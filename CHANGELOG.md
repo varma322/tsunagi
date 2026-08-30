@@ -4,7 +4,13 @@ All notable changes to Tsunagi. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.0] — 2026-08-29
+
+Two ways to get messages out of Tsunagi and into something else: export them, or
+have the server push them as they arrive. Migration `0005` adds the `webhooks`
+table; nothing existing changes, and an upgrade is a rebuild and a restart. The
+Android app is unchanged — its version moves only so the four version strings
+agree.
 
 ### Added
 
@@ -272,6 +278,7 @@ time — over TLS, with role-based access and single-use device enrolment.
 - R8/minification is disabled for the Android release build.
 - No instrumented end-to-end test of the Android app against a live server.
 
+[1.1.0]: https://github.com/you/tsunagi/releases/tag/v1.1.0
 [1.0.2]: https://github.com/you/tsunagi/releases/tag/v1.0.2
 [1.0.1]: https://github.com/you/tsunagi/releases/tag/v1.0.1
 [1.0.0]: https://github.com/you/tsunagi/releases/tag/v1.0.0
