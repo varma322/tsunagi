@@ -31,13 +31,9 @@ android {
         applicationId = "com.vce.tsunagi"
         minSdk = 26
         targetSdk = 36
-        // versionCode must increase for Android to install this over 1.0.2.
-        // The app is unchanged in 1.1.0 -- the release is server and dashboard
-        // work -- but the four version strings have to agree, and an APK that
-        // reports an older version than the server it talks to invites a bug
-        // report about a mismatch that does not exist.
-        versionCode = 4
-        versionName = "1.1.0"
+        // versionCode must increase for Android to install this over 1.1.0.
+        versionCode = 5
+        versionName = "1.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

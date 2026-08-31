@@ -11,7 +11,7 @@ tracks the path to a complete v1.0 release and beyond. See
 
 ## Current Status
 
-**v1.1.0 is released.** All five milestones are complete: an SMS captured on an
+**v1.1.1 is released.** All five milestones are complete: an SMS captured on an
 Android device is stored locally, uploaded to the server, persisted, and visible
 in the web dashboard in real time — over TLS, with rate limiting, a local
 retention policy, admin/read-only roles, and single-use device enrolment.
