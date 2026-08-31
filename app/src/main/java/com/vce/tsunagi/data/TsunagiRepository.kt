@@ -128,9 +128,14 @@ class TsunagiRepository(
         settings.recordSweep(now)
         if (candidates.isEmpty()) return SweepOutcome(recovered = 0, readable = true)
 
+        // Ids of stored rows already accounted for on this sweep, so no two
+        // swept messages are matched to the same one. Without it, a message
+        // and its resend -- identical text, minutes apart -- would both match
+        // the first row stored and the second would be dropped.
+        val claimed = HashSet<String>()
         var recovered = 0
         for (candidate in candidates) {
-            if (storeIfMissing(candidate)) recovered++
+            if (storeIfMissing(candidate, claimed)) recovered++
         }
 
         // Advance only as far as what was actually examined. A sweep cut short
@@ -148,20 +153,41 @@ class TsunagiRepository(
         return SweepOutcome(recovered = recovered, readable = true)
     }
 
-    /** True when the message was missing and has now been stored. */
-    private suspend fun storeIfMissing(candidate: InboxMessage): Boolean {
-        // The derived id catches the ordinary case, where both sightings agree
-        // on the timestamp. They disagree when the platform did not record a
-        // service centre time, so fall back to matching on content near the
-        // same moment rather than storing a second copy.
-        val near = messageDao.existsNear(
+    /**
+     * Stores a swept message unless it is already on hand. Returns true when it
+     * was missing and has now been stored; records in [claimed] any stored row
+     * it accounted for, so a later candidate cannot match the same one twice.
+     */
+    private suspend fun storeIfMissing(candidate: InboxMessage, claimed: MutableSet<String>): Boolean {
+        val id = MessageIdentity.of(candidate.sender, candidate.body, candidate.receivedAt)
+
+        // The ordinary case: broadcast and sweep agree on the timestamp, so the
+        // derived ids match and the row is already here under this id.
+        if (messageDao.find(id) != null) {
+            claimed.add(id)
+            return false
+        }
+
+        // They disagree when the platform recorded no service centre time, so
+        // the same message can be stored under a slightly different timestamp.
+        // Match it to one such row -- but only one, and never one already
+        // claimed by an earlier candidate this sweep, or a genuine resend with
+        // identical text would be swallowed by the copy ahead of it.
+        val alreadyStored = messageDao.idsNear(
             sender = candidate.sender,
             body = candidate.body,
             from = candidate.receivedAt - BACKFILL_MATCH_WINDOW_MILLIS,
             to = candidate.receivedAt + BACKFILL_MATCH_WINDOW_MILLIS,
         )
-        if (near) return false
-        return captureSms(candidate.sender, candidate.body, candidate.receivedAt)
+        val match = alreadyStored.firstOrNull { it !in claimed }
+        if (match != null) {
+            claimed.add(match)
+            return false
+        }
+
+        val stored = captureSms(candidate.sender, candidate.body, candidate.receivedAt)
+        if (stored) claimed.add(id)
+        return stored
     }
 
     suspend fun currentDevice(): DeviceEntity? = deviceDao.get()

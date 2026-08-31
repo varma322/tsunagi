@@ -45,25 +45,29 @@ interface MessageDao {
     suspend fun find(id: String): MessageEntity?
 
     /**
-     * Whether an equivalent message is already stored near this timestamp.
+     * Ids of stored messages with this exact sender and body whose timestamp
+     * falls within the window, oldest first.
      *
      * The derived id is the primary defence against duplicates, but it only
      * holds when both sightings agree on the timestamp. A broadcast reports the
      * service centre's timestamp while the platform inbox may record when the
      * message was written to the provider, so the sweep needs a second check
-     * that tolerates the two disagreeing by a few minutes.
+     * that tolerates the two disagreeing by a few minutes. Returning the ids
+     * rather than a yes/no is what lets the sweep match each swept message to at
+     * most one stored row and never reuse one, so a message and a later resend
+     * that share their text -- an OTP arriving twice -- are kept as two rows
+     * rather than collapsed into one.
      */
     @Query(
         """
-        SELECT EXISTS(
-            SELECT 1 FROM messages
-            WHERE sender = :sender
-              AND body = :body
-              AND received_at BETWEEN :from AND :to
-        )
+        SELECT id FROM messages
+        WHERE sender = :sender
+          AND body = :body
+          AND received_at BETWEEN :from AND :to
+        ORDER BY received_at ASC
         """
     )
-    suspend fun existsNear(sender: String, body: String, from: Long, to: Long): Boolean
+    suspend fun idsNear(sender: String, body: String, from: Long, to: Long): List<String>
 
     @Query(
         """

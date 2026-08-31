@@ -4,6 +4,21 @@ All notable changes to Tsunagi. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **The inbox sweep no longer drops a resend that shares its text with another
+  message.** When two genuinely distinct messages with identical bodies arrived
+  within ten minutes and both reached the app through the sweep rather than the
+  live broadcast — the case while the app is parked, and exactly what an OTP and
+  its resend look like — the second was discarded as a duplicate of the first.
+  The sweep's content match now pairs each swept message with at most one stored
+  row and never reuses one, so distinct messages survive while a message seen
+  twice is still stored once. Found by a field test that flooded a real phone
+  with OTP traffic; the loss mechanism is a candidate for the small,
+  undiagnosed losses noted under Known Gaps.
+
 ## [1.1.0] — 2026-08-29
 
 Two ways to get messages out of Tsunagi and into something else: export them, or

@@ -163,12 +163,18 @@ prove deduplication holds against real provider data — 195 messages recovered
 on a first sweep, zero on a repeat — but only a real phone exercises a vendor
 battery manager parking the app in the stopped state. What remains open:
 
-- **Three to five messages were still lost over that period.** Small in volume,
-  and judged acceptable for now, but the sweep exists precisely so that a miss
-  becomes a delay instead of a loss, so it is not yet airtight. Nothing has been
-  diagnosed; the untested suspects are a message that never landed in the
-  platform inbox for the sweep to find, and the watermark the sweep resumes
-  from.
+- **Three to five messages were still lost over that period.** One concrete
+  mechanism has since been found and fixed: two genuinely distinct messages with
+  identical text arriving within ten minutes — an OTP and its resend — were
+  collapsed into one when both reached the app through the sweep rather than the
+  live broadcast, because the sweep's content match suppressed the second on any
+  hit rather than pairing each swept message to at most one stored row. A field
+  test that flooded a physical phone with OTP traffic surfaced the identical-body
+  pattern; the fix has unit and real-SQLite coverage. Whether this accounts for
+  all of the original losses is unproven — the other untested suspect remains a
+  message that never landed in the platform inbox for the sweep to find. That
+  same field run delivered 44 messages with **zero loss** end to end, and the
+  sweep recovered one broadcast miss on real hardware for the first time.
 
 ### Testing
 

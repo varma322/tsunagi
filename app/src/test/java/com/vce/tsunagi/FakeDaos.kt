@@ -50,14 +50,11 @@ class FakeMessageDao : MessageDao {
 
     override suspend fun find(id: String): MessageEntity? = rows[id]
 
-    override suspend fun existsNear(
-        sender: String,
-        body: String,
-        from: Long,
-        to: Long,
-    ): Boolean = rows.values.any {
-        it.sender == sender && it.body == body && it.receivedAt in from..to
-    }
+    override suspend fun idsNear(sender: String, body: String, from: Long, to: Long): List<String> =
+        rows.values
+            .filter { it.sender == sender && it.body == body && it.receivedAt in from..to }
+            .sortedBy { it.receivedAt }
+            .map { it.id }
 
     override suspend fun pendingBatch(limit: Int): List<MessageEntity> =
         rows.values

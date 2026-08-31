@@ -65,43 +65,37 @@ class MessageDaoTest {
     }
 
     @Test
-    fun existsNearFindsAMessageInsideTheWindow() = runTest {
+    fun idsNearReturnsEachMatchingRowNewestLast() = runTest {
+        // Two distinct messages with identical text, minutes apart -- the sweep
+        // relies on getting both ids back, not a yes/no, so it can match each
+        // to at most one and keep a resend that shares its body with the first.
         dao.insert(message(receivedAt = 60_000L))
+        dao.insert(message(receivedAt = 180_000L))
 
-        assertTrue(
-            dao.existsNear("AX-AIRTEL", "your code is 4821", 30_000L, 90_000L)
+        val ids = dao.idsNear("AX-AIRTEL", "your code is 4821", 0L, 600_000L)
+
+        assertEquals("both distinct rows must come back", 2, ids.size)
+        assertEquals(ids.toSet().size, ids.size)
+        assertEquals(
+            listOf(
+                MessageIdentity.of("AX-AIRTEL", "your code is 4821", 60_000L),
+                MessageIdentity.of("AX-AIRTEL", "your code is 4821", 180_000L),
+            ),
+            ids,
         )
     }
 
     @Test
-    fun existsNearIncludesItsBounds() = runTest {
+    fun idsNearHonoursTheWindowSenderAndBody() = runTest {
         dao.insert(message(receivedAt = 60_000L))
 
-        assertTrue("lower bound", dao.existsNear("AX-AIRTEL", "your code is 4821", 60_000L, 90_000L))
-        assertTrue("upper bound", dao.existsNear("AX-AIRTEL", "your code is 4821", 30_000L, 60_000L))
-    }
-
-    @Test
-    fun existsNearRejectsAMessageOutsideTheWindow() = runTest {
-        dao.insert(message(receivedAt = 60_000L))
-
-        assertFalse(
-            dao.existsNear("AX-AIRTEL", "your code is 4821", 90_000L, 120_000L)
-        )
-    }
-
-    @Test
-    fun existsNearDistinguishesSenderAndBody() = runTest {
-        dao.insert(message(receivedAt = 60_000L))
-
-        assertFalse(
-            "a different sender is a different message",
-            dao.existsNear("VM-AIRTEL", "your code is 4821", 30_000L, 90_000L),
-        )
-        assertFalse(
-            "a different body is a different message",
-            dao.existsNear("AX-AIRTEL", "your code is 9999", 30_000L, 90_000L),
-        )
+        assertEquals(1, dao.idsNear("AX-AIRTEL", "your code is 4821", 30_000L, 90_000L).size)
+        // BETWEEN includes its bounds.
+        assertEquals(1, dao.idsNear("AX-AIRTEL", "your code is 4821", 60_000L, 90_000L).size)
+        assertEquals(1, dao.idsNear("AX-AIRTEL", "your code is 4821", 30_000L, 60_000L).size)
+        assertTrue(dao.idsNear("AX-AIRTEL", "your code is 4821", 90_000L, 120_000L).isEmpty())
+        assertTrue(dao.idsNear("VM-AIRTEL", "your code is 4821", 0L, 600_000L).isEmpty())
+        assertTrue(dao.idsNear("AX-AIRTEL", "different text", 0L, 600_000L).isEmpty())
     }
 
     @Test

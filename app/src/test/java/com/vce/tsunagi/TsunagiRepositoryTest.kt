@@ -666,6 +666,46 @@ class TsunagiRepositoryTest {
     }
 
     @Test
+    fun `distinct messages with the same body arriving through the sweep are both kept`() =
+        runTest {
+            // The OTP-resend case, and the one a field test with BombItUp made
+            // real: the same "Your OTP is 999111" arrives twice, minutes apart,
+            // as two separate messages. While the app is parked neither is
+            // delivered by broadcast, so both reach it through the sweep -- the
+            // exact case the sweep exists for. The platform inbox holds two
+            // rows, so the truth is two, and the content-match dedup must not
+            // collapse them into one.
+            deviceDao.device = registeredDevice()
+
+            val outcome = sweeping(
+                InboxMessage("VM-BANK", "Your OTP is 999111. Do not share it.", 5_000L, 5_000L),
+                InboxMessage("VM-BANK", "Your OTP is 999111. Do not share it.", 125_000L, 125_000L),
+            ).sync()
+
+            assertEquals(SyncOutcome.Success(2), outcome)
+            assertEquals("both distinct messages must survive the sweep", 2, messageDao.rows.size)
+        }
+
+    @Test
+    fun `a resend is kept when the sweep re-reads it beside the broadcast copy`() = runTest {
+        // The broadcast caught the first OTP. A resend with identical text
+        // lands two minutes later while the app is parked. The next sweep reads
+        // both from the inbox -- the broadcast has not advanced the sweep's
+        // watermark -- so the first matches its stored row and the second, a
+        // genuinely new message, is kept rather than folded into it.
+        deviceDao.device = registeredDevice()
+        val repository = sweeping(
+            InboxMessage("VM-BANK", "Your OTP is 999111. Do not share it.", 5_000L, 5_000L),
+            InboxMessage("VM-BANK", "Your OTP is 999111. Do not share it.", 125_000L, 125_000L),
+        )
+        repository.captureSms("VM-BANK", "Your OTP is 999111. Do not share it.", 5_000L)
+
+        repository.sync()
+
+        assertEquals(2, messageDao.rows.size)
+    }
+
+    @Test
     fun `a recovered message uploads on the same pass`() = runTest {
         deviceDao.device = registeredDevice()
 
