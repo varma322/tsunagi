@@ -163,18 +163,27 @@ prove deduplication holds against real provider data — 195 messages recovered
 on a first sweep, zero on a repeat — but only a real phone exercises a vendor
 battery manager parking the app in the stopped state. What remains open:
 
-- **Three to five messages were still lost over that period.** One concrete
-  mechanism has since been found and fixed: two genuinely distinct messages with
-  identical text arriving within ten minutes — an OTP and its resend — were
-  collapsed into one when both reached the app through the sweep rather than the
-  live broadcast, because the sweep's content match suppressed the second on any
-  hit rather than pairing each swept message to at most one stored row. A field
-  test that flooded a physical phone with OTP traffic surfaced the identical-body
-  pattern; the fix has unit and real-SQLite coverage. Whether this accounts for
-  all of the original losses is unproven — the other untested suspect remains a
-  message that never landed in the platform inbox for the sweep to find. That
-  same field run delivered 44 messages with **zero loss** end to end, and the
-  sweep recovered one broadcast miss on real hardware for the first time.
+- **A dedup mechanism that could drop a resend — found, fixed, and verified on
+  hardware.** Two genuinely distinct messages with identical text arriving within
+  ten minutes — an OTP and its resend — were collapsed into one when both reached
+  the app through the sweep rather than the live broadcast, because the sweep's
+  content match suppressed the second on any hit rather than pairing each swept
+  message to at most one stored row. A field test that flooded a physical phone
+  with OTP traffic surfaced the identical-body pattern. The fix is reproduced
+  red-to-green in unit tests, and its query and the sweep are exercised against
+  real SQLite and the real SMS provider on a physical device (the instrumented
+  suite runs there); a warm-path field reconciliation matched the phone's inbox
+  to the server as multisets, identical-body groups included, and the sweep
+  recovered a real broadcast miss on hardware for the first time.
+
+  What is **not** closed: whether this was the whole of the original 3–5 losses,
+  and the other untested suspect — a message that never landed in the platform
+  inbox for the sweep to find. A scripted live demonstration of the *parked*
+  path (force-stop, receive identical messages, resume) could not be run on the
+  test phone: MIUI silently refuses shell writes to the SMS provider, so
+  identical inbox rows cannot be injected on demand, and real OTP traffic does
+  not arrive on a schedule. The parked path is covered by the instrumented sweep
+  test rather than a live capture.
 
 ### Testing
 
