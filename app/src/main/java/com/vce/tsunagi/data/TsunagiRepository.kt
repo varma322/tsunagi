@@ -204,6 +204,13 @@ class TsunagiRepository(
             return SyncOutcome.Idle("Server URL and device name are not set yet.")
         }
 
+        // Paused: nothing leaves the phone. Capture keeps filling the queue, so
+        // no message is lost -- it just does not upload until sync resumes. The
+        // sweep is skipped too; it catches up on the first pass after resume.
+        if (!config.syncEnabled) {
+            return SyncOutcome.Idle("Sync is paused.")
+        }
+
         val api = try {
             apiProvider(config.serverUrl)
         } catch (error: IllegalArgumentException) {
@@ -223,6 +230,16 @@ class TsunagiRepository(
 
         // A crash mid-upload can strand rows in UPLOADING; put them back in line.
         messageDao.requeueStranded()
+
+        // The first pass after a resume: hold back whatever arrived while
+        // paused, if the user chose not to sync that session. After the sweep,
+        // so a message the broadcast missed and the sweep just recovered is held
+        // back by the same window rather than uploaded.
+        if (config.excludeFrom != null && config.excludeTo != null) {
+            val held = messageDao.excludeReceivedBetween(config.excludeFrom, config.excludeTo)
+            settings.clearExclusionWindow()
+            if (held > 0) Log.i(TAG, "held back  message(s) received while sync was paused")
+        }
 
         val device = when (val registration = ensureRegistered(api, config)) {
             is Registration.Ready -> registration.device

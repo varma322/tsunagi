@@ -36,6 +36,11 @@ data class HomeUiState(
 
     /** Permanently refused by the server, and no longer in the upload queue. */
     val quarantined: Int get() = counts.getOrElse(SyncStatus.QUARANTINED) { 0 }
+
+    /** Captured while paused and deliberately never uploaded. */
+    val excluded: Int get() = counts.getOrElse(SyncStatus.EXCLUDED) { 0 }
+
+    val syncEnabled: Boolean get() = settings.syncEnabled
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -75,6 +80,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun syncNow() = SyncScheduler.syncNow(getApplication())
+
+    /** Pause or resume uploading. Resuming kicks off a sync straight away. */
+    fun setSyncEnabled(enabled: Boolean) {
+        if (enabled) {
+            container.settings.resumeSync()
+            SyncScheduler.syncNow(getApplication())
+        } else {
+            container.settings.pauseSync()
+        }
+    }
+
+    /** Whether a paused session's messages are held back rather than uploaded. */
+    fun setExcludePausedMessages(enabled: Boolean) {
+        container.settings.excludePausedMessages = enabled
+    }
 
     /** Drops the stored registration so the next sync registers again. */
     fun forgetDevice() {

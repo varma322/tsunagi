@@ -28,9 +28,31 @@ data class TsunagiSettings(
      * server is told.
      */
     val lastSweptAt: Long? = null,
+    /** False when the user has paused uploading. Capture continues regardless. */
+    val syncEnabled: Boolean = true,
+    /**
+     * When set, messages received while sync is paused are held back on resume
+     * rather than uploaded. Off by default, so a pause only delays a sync.
+     */
+    val excludePausedMessages: Boolean = false,
+    /** When the current pause began, or null when sync is running. */
+    val pausedSince: Long? = null,
+    /**
+     * A finished pause whose messages are still to be held back, as
+     * [received-at from, received-at to]. Set on resume when
+     * [excludePausedMessages] is on, and cleared once the next sync has applied
+     * it -- after the sweep, so a message the sweep recovers on resume is caught
+     * too. Null when there is nothing to exclude.
+     */
+    val excludeFrom: Long? = null,
+    val excludeTo: Long? = null,
 ) {
     val isConfigured: Boolean
         get() = serverUrl.isNotBlank() && deviceName.isNotBlank()
+
+    /** A pause window is waiting to be applied on the next sync. */
+    val hasPendingExclusion: Boolean
+        get() = excludeFrom != null && excludeTo != null
 
     companion object {
         const val DEFAULT_RETENTION_DAYS = 30
@@ -55,6 +77,9 @@ interface SyncSettings {
 
     /** Note that the platform store could still be read, at [at]. */
     fun recordSweep(at: Long)
+
+    /** Drop the pending pause-exclusion window once a sync has applied it. */
+    fun clearExclusionWindow()
 }
 
 /**
@@ -101,6 +126,26 @@ class SettingsStore(context: Context) : SyncSettings {
         get() = prefs.getLong(KEY_LAST_SWEPT_AT, 0L).takeIf { it > 0L }
         set(value) = prefs.edit().putLong(KEY_LAST_SWEPT_AT, value ?: 0L).apply()
 
+    var syncEnabled: Boolean
+        get() = prefs.getBoolean(KEY_SYNC_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_SYNC_ENABLED, value).apply()
+
+    var excludePausedMessages: Boolean
+        get() = prefs.getBoolean(KEY_EXCLUDE_PAUSED, false)
+        set(value) = prefs.edit().putBoolean(KEY_EXCLUDE_PAUSED, value).apply()
+
+    var pausedSince: Long?
+        get() = prefs.getLong(KEY_PAUSED_SINCE, 0L).takeIf { it > 0L }
+        set(value) = prefs.edit().putLong(KEY_PAUSED_SINCE, value ?: 0L).apply()
+
+    private var excludeFrom: Long?
+        get() = prefs.getLong(KEY_EXCLUDE_FROM, 0L).takeIf { it > 0L }
+        set(value) = prefs.edit().putLong(KEY_EXCLUDE_FROM, value ?: 0L).apply()
+
+    private var excludeTo: Long?
+        get() = prefs.getLong(KEY_EXCLUDE_TO, 0L).takeIf { it > 0L }
+        set(value) = prefs.edit().putLong(KEY_EXCLUDE_TO, value ?: 0L).apply()
+
     override fun snapshot(): TsunagiSettings = TsunagiSettings(
         serverUrl = serverUrl,
         deviceName = deviceName,
@@ -110,6 +155,11 @@ class SettingsStore(context: Context) : SyncSettings {
         retentionDays = retentionDays,
         lastBackfillAt = lastBackfillAt,
         lastSweptAt = lastSweptAt,
+        syncEnabled = syncEnabled,
+        excludePausedMessages = excludePausedMessages,
+        pausedSince = pausedSince,
+        excludeFrom = excludeFrom,
+        excludeTo = excludeTo,
     )
 
     fun observe(): Flow<TsunagiSettings> = callbackFlow {
@@ -137,6 +187,36 @@ class SettingsStore(context: Context) : SyncSettings {
 
     override fun clearEnrolmentCode() {
         prefs.edit().remove(KEY_SETUP_KEY).apply()
+    }
+
+    /** Stop uploading. Capture keeps running; the queue simply stops draining. */
+    fun pauseSync() {
+        prefs.edit()
+            .putBoolean(KEY_SYNC_ENABLED, false)
+            .putLong(KEY_PAUSED_SINCE, System.currentTimeMillis())
+            .apply()
+    }
+
+    /**
+     * Resume uploading. When the paused session is not to be synced, the span it
+     * covered is recorded for the next sync to hold back -- after its sweep, so
+     * a message the broadcast missed and the sweep recovers on resume is held
+     * back too rather than slipping out.
+     */
+    fun resumeSync() {
+        val since = pausedSince
+        val edit = prefs.edit()
+            .putBoolean(KEY_SYNC_ENABLED, true)
+            .putLong(KEY_PAUSED_SINCE, 0L)
+        if (excludePausedMessages && since != null) {
+            edit.putLong(KEY_EXCLUDE_FROM, since)
+                .putLong(KEY_EXCLUDE_TO, System.currentTimeMillis())
+        }
+        edit.apply()
+    }
+
+    override fun clearExclusionWindow() {
+        prefs.edit().putLong(KEY_EXCLUDE_FROM, 0L).putLong(KEY_EXCLUDE_TO, 0L).apply()
     }
 
     override fun recordBackfill(at: Long) {
@@ -168,5 +248,10 @@ class SettingsStore(context: Context) : SyncSettings {
         const val KEY_RETENTION_DAYS = "retention_days"
         const val KEY_LAST_BACKFILL_AT = "last_backfill_at"
         const val KEY_LAST_SWEPT_AT = "last_swept_at"
+        const val KEY_SYNC_ENABLED = "sync_enabled"
+        const val KEY_EXCLUDE_PAUSED = "exclude_paused_messages"
+        const val KEY_PAUSED_SINCE = "paused_since"
+        const val KEY_EXCLUDE_FROM = "exclude_from"
+        const val KEY_EXCLUDE_TO = "exclude_to"
     }
 }

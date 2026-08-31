@@ -66,6 +66,15 @@ class FakeMessageDao : MessageDao {
 
     override suspend fun newestReceivedAt(): Long? = rows.values.maxOfOrNull { it.receivedAt }
 
+    override suspend fun excludeReceivedBetween(from: Long, to: Long): Int {
+        val held = rows.values.filter {
+            (it.syncStatus == SyncStatus.PENDING || it.syncStatus == SyncStatus.FAILED) &&
+                it.receivedAt in from..to
+        }
+        held.forEach { rows[it.id] = it.copy(syncStatus = SyncStatus.EXCLUDED) }
+        return held.size
+    }
+
     override suspend fun markStatus(ids: List<String>, status: SyncStatus) {
         ids.forEach { id -> rows[id]?.let { rows[id] = it.copy(syncStatus = status) } }
     }

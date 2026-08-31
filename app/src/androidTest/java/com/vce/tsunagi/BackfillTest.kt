@@ -49,6 +49,7 @@ class BackfillTest {
         }
 
         override fun recordSweep(at: Long) = Unit
+        override fun clearExclusionWindow() = Unit
     }
 
     @Before

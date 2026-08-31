@@ -30,6 +30,8 @@ class MainActivity : ComponentActivity() {
                         onSave = viewModel::saveConnection,
                         onSyncNow = viewModel::syncNow,
                         onForgetDevice = viewModel::forgetDevice,
+                        onSetSyncEnabled = viewModel::setSyncEnabled,
+                        onSetExcludePaused = viewModel::setExcludePausedMessages,
                         modifier = Modifier.padding(innerPadding),
                     )
                 }

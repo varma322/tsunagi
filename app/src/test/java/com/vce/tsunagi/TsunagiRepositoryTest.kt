@@ -70,6 +70,13 @@ class TsunagiRepositoryTest {
             sweptAt = at
             current = current.copy(lastSweptAt = at)
         }
+
+        var exclusionCleared = false
+
+        override fun clearExclusionWindow() {
+            exclusionCleared = true
+            current = current.copy(excludeFrom = null, excludeTo = null)
+        }
     }
 
     private lateinit var settings: FakeSettings
@@ -743,6 +750,78 @@ class TsunagiRepositoryTest {
 
         assertEquals(SyncOutcome.Success(1), outcome)
         assertEquals("recent", messageDao.rows.values.single().body)
+    }
+
+    // --- pause and resume ------------------------------------------------
+
+    @Test
+    fun `a paused sync uploads nothing but leaves the queue intact`() = runTest {
+        deviceDao.device = registeredDevice()
+        seedPending(2)
+
+        val outcome = repository(config = configured.copy(syncEnabled = false)).sync()
+
+        assertTrue("a pause reports idle, not failure", outcome is SyncOutcome.Idle)
+        assertTrue("nothing may leave while paused", api.uploadedBatches.isEmpty())
+        assertEquals(0, api.checkIns.size)
+        assertTrue(
+            "captured messages wait in the queue rather than being lost",
+            messageDao.rows.values.all { it.syncStatus == SyncStatus.PENDING },
+        )
+    }
+
+    @Test
+    fun `resuming uploads what was captured while paused when nothing is held back`() = runTest {
+        // The option is off, so a pause only delays the sync.
+        deviceDao.device = registeredDevice()
+        seedPending(2)
+
+        repository(config = configured.copy(syncEnabled = true)).sync()
+
+        assertEquals(2, api.uploadedBatches.single().messages.size)
+    }
+
+    @Test
+    fun `messages received while paused are held back on resume when the option is on`() = runTest {
+        deviceDao.device = registeredDevice()
+        val repository =
+            repository(config = configured.copy(excludeFrom = 5_000L, excludeTo = 9_000L))
+        repository.captureSms("VM-BANK", "arrived while paused", 6_000L)
+        repository.captureSms("VM-BANK", "arrived after resuming", 20_000L)
+
+        repository.sync()
+
+        val held = messageDao.rows.values.single { it.body == "arrived while paused" }
+        val sent = messageDao.rows.values.single { it.body == "arrived after resuming" }
+        assertEquals(SyncStatus.EXCLUDED, held.syncStatus)
+        assertEquals(SyncStatus.SYNCED, sent.syncStatus)
+        assertEquals(
+            "only the message outside the pause goes up",
+            1,
+            api.uploadedBatches.single().messages.size,
+        )
+        assertTrue("the window is applied once, then cleared", settings.exclusionCleared)
+    }
+
+    @Test
+    fun `a paused message the sweep recovers on resume is also held back`() = runTest {
+        // The broadcast missed it while parked; the sweep recovers it on resume.
+        // Keying the hold-back on when it was received, not how it was captured,
+        // is what keeps it from slipping out.
+        deviceDao.device = registeredDevice()
+        val repository = repository(
+            config = configured.copy(
+                lastBackfillAt = 1L,
+                excludeFrom = 5_000L,
+                excludeTo = 9_000L,
+            ),
+            inbox = inboxOf(InboxMessage("VM-BANK", "missed while paused", 6_000L, 6_000L)),
+        )
+
+        repository.sync()
+
+        assertEquals(SyncStatus.EXCLUDED, messageDao.rows.values.single().syncStatus)
+        assertTrue("a held-back message must never be uploaded", api.uploadedBatches.isEmpty())
     }
 
     // --- a message the server will never accept --------------------------

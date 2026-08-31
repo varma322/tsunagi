@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -28,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -68,6 +70,8 @@ fun HomeScreen(
     onSave: (String, String, String, Int) -> Unit,
     onSyncNow: () -> Unit,
     onForgetDevice: () -> Unit,
+    onSetSyncEnabled: (Boolean) -> Unit,
+    onSetExcludePaused: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -115,7 +119,15 @@ fun HomeScreen(
             }
         }
 
-        item { StatusCard(state = state, onSyncNow = onSyncNow, onForget = onForgetDevice) }
+        item {
+            StatusCard(
+                state = state,
+                onSyncNow = onSyncNow,
+                onForget = onForgetDevice,
+                onSetSyncEnabled = onSetSyncEnabled,
+                onSetExcludePaused = onSetExcludePaused,
+            )
+        }
 
         item { SettingsCard(state = state, onSave = onSave) }
 
@@ -197,7 +209,13 @@ private fun BatteryCard(onExempt: () -> Unit) {
 }
 
 @Composable
-private fun StatusCard(state: HomeUiState, onSyncNow: () -> Unit, onForget: () -> Unit) {
+private fun StatusCard(
+    state: HomeUiState,
+    onSyncNow: () -> Unit,
+    onForget: () -> Unit,
+    onSetSyncEnabled: (Boolean) -> Unit,
+    onSetExcludePaused: (Boolean) -> Unit,
+) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -224,6 +242,46 @@ private fun StatusCard(state: HomeUiState, onSyncNow: () -> Unit, onForget: () -
                     text = id,
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            // Sync on/off. Capture never stops; this governs only uploading.
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.weight(1f)) {
+                    Text("Sync", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        text = if (state.settings.syncEnabled) {
+                            "Uploading captured messages to the server."
+                        } else {
+                            "Paused. Messages are still captured on this phone, not uploaded."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = state.settings.syncEnabled, onCheckedChange = onSetSyncEnabled)
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = state.settings.excludePausedMessages,
+                    onCheckedChange = onSetExcludePaused,
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = "Don't sync messages received while paused",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+
+            if (state.excluded > 0) {
+                Text(
+                    text = "${state.excluded} message(s) held back from a paused session. " +
+                        "Stored on this phone, never uploaded.",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -269,7 +327,7 @@ private fun StatusCard(state: HomeUiState, onSyncNow: () -> Unit, onForget: () -
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onSyncNow, enabled = !state.isSyncing) {
+                Button(onClick = onSyncNow, enabled = state.settings.syncEnabled && !state.isSyncing) {
                     if (state.isSyncing) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(16.dp),

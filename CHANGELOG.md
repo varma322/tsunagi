@@ -4,6 +4,24 @@ All notable changes to Tsunagi. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **A sync on/off switch in the Android app.** Turning sync off stops uploads
+  while capture keeps running, so the queue holds rather than loses anything —
+  messages wait on the phone until sync is turned back on. Paused, the app goes
+  quiet with the server entirely (no upload and no check-in), so the dashboard
+  will show the device offline until it resumes; that is the honest reading of
+  an off switch.
+- **An opt-in to not sync a paused session's messages.** With it on, messages
+  *received* while paused are kept on the phone but never uploaded, even after
+  resuming — for pausing before something private arrives. The hold-back is
+  keyed on when a message was received, not on how it was captured, so one the
+  live broadcast missed and the inbox sweep recovers after resume is caught by
+  the same window rather than slipping out. A new `EXCLUDED` state marks these;
+  they are surfaced in the app and never enter the upload queue.
+
 ## [1.1.1] — 2026-08-31
 
 A capture-reliability patch: the one fix below, found by flooding a physical

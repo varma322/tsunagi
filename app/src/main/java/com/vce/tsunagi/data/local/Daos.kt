@@ -140,6 +140,27 @@ interface MessageDao {
     @Query("SELECT COUNT(*) FROM messages WHERE sync_status = 'QUARANTINED'")
     suspend fun quarantinedCount(): Int
 
+    /**
+     * Sets aside every not-yet-uploaded message received within a window,
+     * returning how many were affected.
+     *
+     * Applied on resume for the messages that arrived while sync was paused,
+     * when the user chose not to sync a paused session. Keyed on when a message
+     * was received, not on how it was captured, so one the broadcast missed and
+     * the sweep recovers after resume is caught by the same window rather than
+     * slipping out. Already-synced rows are left alone; only what has not left
+     * the phone can still be held back.
+     */
+    @Query(
+        """
+        UPDATE messages
+        SET sync_status = 'EXCLUDED'
+        WHERE sync_status IN ('PENDING', 'FAILED')
+          AND received_at BETWEEN :from AND :to
+        """
+    )
+    suspend fun excludeReceivedBetween(from: Long, to: Long): Int
+
     /** Recovers rows stranded in UPLOADING by a process death mid-upload. */
     @Query("UPDATE messages SET sync_status = 'PENDING' WHERE sync_status = 'UPLOADING'")
     suspend fun requeueStranded(): Int

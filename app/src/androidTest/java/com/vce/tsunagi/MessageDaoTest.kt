@@ -99,6 +99,30 @@ class MessageDaoTest {
     }
 
     @Test
+    fun excludeReceivedBetweenHoldsBackOnlyPendingMessagesInsideTheWindow() = runTest {
+        val before = message(body = "before", receivedAt = 1_000L)
+        val inside = message(body = "inside", receivedAt = 5_000L)
+        val after = message(body = "after", receivedAt = 9_000L)
+        val syncedInside = message(body = "already synced", receivedAt = 6_000L)
+        listOf(before, inside, after, syncedInside).forEach { dao.insert(it) }
+        dao.markSynced(listOf(syncedInside.id), 6_000L)
+
+        val held = dao.excludeReceivedBetween(2_000L, 8_000L)
+
+        assertEquals("only the one pending row inside the window", 1, held)
+        assertEquals(SyncStatus.EXCLUDED, dao.find(inside.id)?.syncStatus)
+        assertEquals(SyncStatus.PENDING, dao.find(before.id)?.syncStatus)
+        assertEquals(SyncStatus.PENDING, dao.find(after.id)?.syncStatus)
+        assertEquals(
+            "an already-synced message is not pulled back",
+            SyncStatus.SYNCED,
+            dao.find(syncedInside.id)?.syncStatus,
+        )
+        // The held-back message must no longer be offered for upload.
+        assertTrue(dao.pendingBatch(100).none { it.id == inside.id })
+    }
+
+    @Test
     fun quarantineTakesAMessageOutOfTheQueue() = runTest {
         dao.insert(message())
         val id = MessageIdentity.of("AX-AIRTEL", "your code is 4821", 1_000L)

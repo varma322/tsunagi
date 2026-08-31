@@ -21,6 +21,14 @@ enum class SyncStatus {
     SYNCED,
     FAILED,
     QUARANTINED,
+
+    /**
+     * Captured locally but deliberately never uploaded: it arrived while sync
+     * was paused and the user chose not to sync a paused session. Kept so the
+     * message is not lost on the phone, excluded from [MessageDao.pendingBatch]
+     * so it never leaves.
+     */
+    EXCLUDED,
 }
 
 /**
