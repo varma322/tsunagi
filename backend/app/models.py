@@ -196,3 +196,26 @@ class Webhook(Base):
     @property
     def event_names(self) -> list[str]:
         return [name for name in self.events.split(",") if name]
+
+
+class AuditEvent(Base):
+    """A durable record of a noteworthy event.
+
+    The event bus and its log are observability data -- capped, and gone on a
+    restart. This table is the opposite: append-only, uncapped, and meant to
+    answer "what happened, and when" long after the fact. Only events worth
+    auditing are written here; per-message and per-sync traffic is not, because
+    the messages table already records that and it would bury the signal.
+    """
+
+    __tablename__ = "audit_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    level: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: The event's payload as JSON text. Stored as text rather than JSONB so the
+    #: same schema holds on SQLite; it is read back, never queried into.
+    payload: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, index=True
+    )

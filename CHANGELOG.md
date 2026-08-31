@@ -17,6 +17,15 @@ All notable changes to Tsunagi. Format follows
 
 ### Added
 
+- **A durable audit trail.** The event bus keeps only a capped, in-memory log
+  for the dashboard's live view, which is gone on a restart. Noteworthy events —
+  device and key lifecycle, enrolment, capture health, webhook failures — are
+  now also written to an append-only `audit_events` table (migration `0006`) and
+  read back through `GET /api/v1/audit`, which paginates and filters by type,
+  level, and time. High-frequency message and sync traffic is deliberately not
+  audited: the messages table already records it, and it would bury the security
+  and administrative events the trail exists for. The bus stays storage-agnostic
+  — persistence is an injected sink — so the live log is unchanged.
 - **A sync on/off switch in the Android app.** Turning sync off stops uploads
   while capture keeps running, so the queue holds rather than loses anything —
   messages wait on the phone until sync is turned back on. Paused, the app goes

@@ -12,7 +12,7 @@ import contextlib
 import json
 import logging
 from collections import deque
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -56,6 +56,13 @@ class EventBus:
     def __init__(self, max_log: int = 1000) -> None:
         self._subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
         self._log: deque[Event] = deque(maxlen=max_log)
+        # An optional durable sink. Injected rather than imported so the bus
+        # stays free of storage concerns; the log above remains capped and
+        # transient regardless.
+        self._audit_sink: Callable[[Event], Awaitable[None]] | None = None
+
+    def set_audit_sink(self, sink: Callable[[Event], Awaitable[None]] | None) -> None:
+        self._audit_sink = sink
 
     async def start(self) -> None:
         return None
@@ -96,6 +103,8 @@ class EventBus:
     async def emit(self, type_: str, level: str = LEVEL_INFO, **payload: Any) -> Event:
         event = Event(type=type_, level=level, payload=payload)
         await self._record(event)
+        if self._audit_sink is not None:
+            await self._audit_sink(event)
         await self.publish({"type": "system.event", "data": event.to_dict()})
         return event
 

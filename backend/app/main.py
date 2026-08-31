@@ -8,10 +8,12 @@ from app import __version__
 from app.config import get_settings
 from app.db import dispose_engine, ensure_schema, get_session_factory
 from app.errors import register_error_handlers
+from app.audit import persist_event
 from app.events import build_event_bus
 from app.middleware import RateLimitMiddleware
 from app.ratelimit import RateLimiter, RedisRateLimiter
 from app.routers import (
+    audit,
     devices,
     enrolments,
     events,
@@ -34,6 +36,8 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
 
     bus = build_event_bus(settings.redis_url, settings.event_log_max)
+    # Mirror auditable events into PostgreSQL, durably, before anything can emit.
+    bus.set_audit_sink(persist_event)
     await bus.start()
     app.state.bus = bus
 
@@ -120,6 +124,7 @@ def create_app() -> FastAPI:
         events.router,
         stats.router,
         webhooks.router,
+        audit.router,
     ):
         app.include_router(router)
     app.include_router(ws.router)

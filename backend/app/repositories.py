@@ -16,7 +16,7 @@ from sqlalchemy import Select, delete, func, select, text, tuple_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import ApiKey, Device, EnrolmentToken, Message, Webhook, utcnow
+from app.models import ApiKey, AuditEvent, Device, EnrolmentToken, Message, Webhook, utcnow
 
 
 class DeviceRepository:
@@ -460,3 +460,45 @@ class WebhookRepository:
             disabled = True
         await self.session.flush()
         return disabled
+
+
+class AuditRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def record(
+        self, *, type_: str, level: str, payload: str, created_at: datetime
+    ) -> AuditEvent:
+        event = AuditEvent(type=type_, level=level, payload=payload, created_at=created_at)
+        self.session.add(event)
+        await self.session.flush()
+        return event
+
+    async def list(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        level: str | None = None,
+        type_: str | None = None,
+        after: datetime | None = None,
+        before: datetime | None = None,
+    ) -> tuple[int, list[AuditEvent]]:
+        statement = select(AuditEvent)
+        if level is not None:
+            statement = statement.where(AuditEvent.level == level)
+        if type_ is not None:
+            statement = statement.where(AuditEvent.type == type_)
+        if after is not None:
+            statement = statement.where(AuditEvent.created_at > after)
+        if before is not None:
+            statement = statement.where(AuditEvent.created_at < before)
+
+        total = int(
+            (await self.session.execute(select(func.count()).select_from(statement.subquery())))
+            .scalar_one()
+        )
+        rows = await self.session.execute(
+            statement.order_by(AuditEvent.created_at.desc(), AuditEvent.id).limit(limit).offset(offset)
+        )
+        return total, list(rows.scalars())

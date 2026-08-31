@@ -329,6 +329,26 @@ class EventListResponse(BaseModel):
     events: list[EventOut]
 
 
+class AuditEventOut(BaseModel):
+    """One durable audit record. Unlike a live event it carries an id and is
+    read back from storage, so it has a stable identity and a real timestamp."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    type: str
+    level: str
+    payload: dict[str, Any]
+    created_at: UtcDatetime
+
+
+class AuditListResponse(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    events: list[AuditEventOut]
+
+
 class StatsResponse(BaseModel):
     messages_total: int
     messages_today: int

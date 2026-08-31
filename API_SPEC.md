@@ -597,6 +597,45 @@ and `system.event` frames) — this endpoint provides the initial backlog.
 
 ---
 
+## Audit Trail
+
+```http
+GET /api/v1/audit
+```
+
+Requires admin scope. The durable counterpart to `GET /events`: where that
+serves the capped in-memory log the dashboard streams, this reads an append-only
+table that survives a restart, is not capped, and paginates.
+
+| Parameter | Meaning | Default |
+|---|---|---|
+| `limit` | 1–500 | 100 |
+| `offset` | skip N | 0 |
+| `level` | `info` / `warn` / `error` | — |
+| `type` | exact event type, e.g. `DEVICE_REVOKED` | — |
+| `after`, `before` | ISO-8601 bounds on `created_at` | — |
+
+```json
+{
+  "total": 42,
+  "limit": 100,
+  "offset": 0,
+  "events": [
+    {
+      "id": "9b3e...",
+      "type": "DEVICE_CAPTURE_BLOCKED",
+      "level": "error",
+      "payload": { "device_id": "6f1c...", "reason": "SMS permission has been revoked on the device." },
+      "created_at": "2026-08-31T10:44:22Z"
+    }
+  ]
+}
+```
+
+Events are newest first. Message and sync traffic (`MSG_RECV`, `SYNC_OK`) is
+**not** in the trail — the messages table already records it, and it would bury
+the administrative and security events this exists for.
+
 ## Statistics
 
 ```http

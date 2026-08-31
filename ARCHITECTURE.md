@@ -269,7 +269,8 @@ Screens:
 - **Webhooks** — register an endpoint, choose its events, send a test delivery,
   and see what the last one returned.
 - **Events** — live-streaming system log with level filter, pause, and clear;
-  seeded from `GET /api/v1/events` and appended from the WebSocket.
+  seeded from `GET /api/v1/events` and appended from the WebSocket. A durable
+  counterpart is persisted to `audit_events` and served by `GET /api/v1/audit`.
 - **Settings** — connection details and sign-out.
 
 Layout is responsive: a fixed glassmorphic sidebar on desktop collapsing to

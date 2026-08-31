@@ -197,8 +197,11 @@ battery manager parking the app in the stopped state. What remains open:
 
 ### Everything else
 
-- **Event log is capped and transient.** Suitable for the dashboard's live view,
-  not for auditing. Deliberate — durable audit logging is a Phase 2 feature.
+- ~~**Event log is capped and transient.**~~ The bus's log stays capped and
+  transient by design — it is the dashboard's live view — but noteworthy events
+  are now also persisted to an append-only `audit_events` table and served,
+  durably and paginated, by `GET /api/v1/audit`. Message and sync traffic is
+  excluded from the trail, since the messages table already records it.
 - **Rate limiting uses a fixed window.** A client can send up to double the
   limit across a window boundary. Acceptable for bounding abuse; a sliding
   window would be needed for precise traffic shaping.

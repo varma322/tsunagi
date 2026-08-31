@@ -114,6 +114,31 @@ a stored `message.new.extra`.
 broken now", and twenty in a row set `disabled_at` so a dead endpoint stops
 costing every message a timeout.
 
+### `audit_events`
+
+A durable, append-only record of noteworthy events.
+
+```sql
+CREATE TABLE audit_events (
+    id         UUID PRIMARY KEY,
+    type       VARCHAR(64)  NOT NULL,   -- e.g. DEVICE_REVOKED, KEY_CREATED
+    level      VARCHAR(16)  NOT NULL,   -- info | warn | error
+    payload    TEXT         NOT NULL,   -- JSON, read back rather than queried
+    created_at TIMESTAMPTZ  NOT NULL
+);
+CREATE INDEX idx_audit_events_created_at ON audit_events (created_at DESC);
+CREATE INDEX idx_audit_events_type       ON audit_events (type);
+```
+
+The event bus keeps a capped, in-memory log for the dashboard's live view; this
+table is the opposite — uncapped and surviving a restart. It is written by a
+sink injected onto the bus, so the bus stays free of storage concerns. Message
+and sync traffic (`MSG_RECV`, `SYNC_OK`) is deliberately excluded: the `messages`
+table already records it, and it would bury the events worth auditing.
+
+`payload` is JSON in a `TEXT` column rather than `JSONB`, so the same schema
+holds on SQLite; it is read back whole, never queried into.
+
 ### `messages`
 
 One row per synchronized SMS. The primary key is the **client-generated UUID**,
