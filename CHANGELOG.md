@@ -6,6 +6,15 @@ All notable changes to Tsunagi. Format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Android app no longer shows a stale "SMS permission required" prompt.**
+  The card was read once when the screen was composed and refreshed only through
+  the in-app request's own callback, so granting or revoking the permission from
+  the system settings and returning left it wrong until the screen was rebuilt.
+  It is now re-read every time the screen resumes, the way the battery-exemption
+  prompt already was.
+
 ### Added
 
 - **A sync on/off switch in the Android app.** Turning sync off stops uploads

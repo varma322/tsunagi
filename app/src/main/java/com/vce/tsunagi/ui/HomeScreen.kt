@@ -75,24 +75,27 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    var permissionsGranted by remember {
-        mutableStateOf(
-            smsPermissions.all {
-                ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
-            }
-        )
+    val hasSmsPermission = {
+        smsPermissions.all {
+            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+        }
     }
+    var permissionsGranted by remember { mutableStateOf(hasSmsPermission()) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results -> permissionsGranted = results.values.all { it } }
 
-    // The exemption is granted on a system screen rather than through a result
-    // callback, so the only reliable moment to re-read it is on the way back.
+    // Neither the SMS permission nor the battery exemption reports back through a
+    // result callback when it is changed from the system settings screen -- a
+    // user can revoke or grant either there and return. Re-reading both on the
+    // way back is what keeps the prompts from lingering after they are answered,
+    // or from staying hidden after access is taken away.
     var batteryExempt by remember { mutableStateOf(BatteryOptimization.isExempt(context)) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
+                permissionsGranted = hasSmsPermission()
                 batteryExempt = BatteryOptimization.isExempt(context)
             }
         }
