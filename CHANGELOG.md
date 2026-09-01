@@ -4,7 +4,13 @@ All notable changes to Tsunagi. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.2.0] — 2026-09-01
+
+Two capabilities and two fixes. A phone can now pause uploading without losing
+capture; the server keeps a durable audit trail alongside its transient event
+log. Migration `0006` adds the `audit_events` table and touches nothing
+existing, so upgrading a deployment is a rebuild and a restart; reinstall the
+APK for the app-side changes.
 
 ### Fixed
 
@@ -333,6 +339,7 @@ time — over TLS, with role-based access and single-use device enrolment.
 - R8/minification is disabled for the Android release build.
 - No instrumented end-to-end test of the Android app against a live server.
 
+[1.2.0]: https://github.com/you/tsunagi/releases/tag/v1.2.0
 [1.1.1]: https://github.com/you/tsunagi/releases/tag/v1.1.1
 [1.1.0]: https://github.com/you/tsunagi/releases/tag/v1.1.0
 [1.0.2]: https://github.com/you/tsunagi/releases/tag/v1.0.2

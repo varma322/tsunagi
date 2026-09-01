@@ -11,7 +11,7 @@ tracks the path to a complete v1.0 release and beyond. See
 
 ## Current Status
 
-**v1.1.1 is released.** All five milestones are complete: an SMS captured on an
+**v1.2.0 is released.** All five milestones are complete: an SMS captured on an
 Android device is stored locally, uploaded to the server, persisted, and visible
 in the web dashboard in real time — over TLS, with rate limiting, a local
 retention policy, admin/read-only roles, and single-use device enrolment.
@@ -33,8 +33,8 @@ it refused, and turned R8 on. 1.1.0 is the first release aimed outward rather
 than at capture: webhooks and CSV/JSON export — see
 [CHANGELOG.md](CHANGELOG.md) and **Capture reliability** under Known Gaps.
 
-Verification currently in place: 142 backend tests (`cd backend && pytest`),
-50 Android unit tests (`gradlew :app:testDebugUnitTest`), 21 Android
+Verification currently in place: 150 backend tests (`cd backend && pytest`),
+56 Android unit tests (`gradlew :app:testDebugUnitTest`), 21 Android
 instrumented tests against real SQLite and a real SMS provider
 (`gradlew :app:connectedDebugAndroidTest`, needs a device or emulator),
 a frontend typecheck

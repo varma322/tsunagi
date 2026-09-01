@@ -31,9 +31,9 @@ android {
         applicationId = "com.vce.tsunagi"
         minSdk = 26
         targetSdk = 36
-        // versionCode must increase for Android to install this over 1.1.0.
-        versionCode = 5
-        versionName = "1.1.1"
+        // versionCode must increase for Android to install this over 1.1.1.
+        versionCode = 6
+        versionName = "1.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
