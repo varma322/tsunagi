@@ -1,8 +1,14 @@
 FROM python:3.12-slim
 
+# Pinned so an image rebuild resolves dependencies with the same resolver that
+# produced uv.lock.
+COPY --from=ghcr.io/astral-sh/uv:0.10.6 /uv /usr/local/bin/uv
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1
+    UV_LINK_MODE=copy \
+    UV_NO_CACHE=1 \
+    PATH="/srv/tsunagi/.venv/bin:$PATH"
 
 WORKDIR /srv/tsunagi
 
@@ -10,8 +16,13 @@ RUN adduser --disabled-password --gecos "" --uid 10001 tsunagi
 
 # Built from the repository root, not backend/, so operational scripts can be
 # shipped alongside the app. See the `api` service in deployment/.
-COPY backend/requirements.txt backend/requirements-postgres.txt ./
-RUN pip install --no-cache-dir -r requirements-postgres.txt
+#
+# --frozen installs exactly what uv.lock pins and fails rather than re-resolving,
+# so the image and a bare-metal `pip install -r requirements-postgres.txt` get
+# the same versions. --no-install-project because the app is a virtual project:
+# it is copied in below and imported from the working directory.
+COPY backend/pyproject.toml backend/uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project --extra postgres
 
 COPY backend/alembic.ini ./
 COPY backend/alembic ./alembic

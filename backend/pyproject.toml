@@ -3,6 +3,30 @@ name = "tsunagi-backend"
 version = "1.2.0"
 description = "Self-hosted SMS synchronization platform - backend API"
 requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.14.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "aiosqlite>=0.20.0",
+    "redis>=5.2.0",
+    "websockets>=13.0",
+]
+
+[project.optional-dependencies]
+# Production driver. Installed in Docker (Python 3.12); may lack prebuilt wheels
+# on very new CPython releases, so it is kept out of the base dependencies to
+# let local development run on SQLite without a compiler.
+postgres = ["asyncpg>=0.30.0"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.28.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

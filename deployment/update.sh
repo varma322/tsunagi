@@ -63,7 +63,9 @@ if printf '%s\n' "$CHANGED" | grep -q "^backend/alembic/versions/"; then
   ok "new migrations detected; database dumped to $BACKUP"
 fi
 
-if changed_in "backend/requirements"; then
+# uv.lock and pyproject.toml are the source of truth; the requirements files are
+# generated from them. Watch all of it so a missed re-export still triggers here.
+if changed_in "backend/requirements" || changed_in "backend/uv.lock" || changed_in "backend/pyproject.toml"; then
   "$INSTALL_DIR/backend/.venv/bin/pip" install --quiet -r "$INSTALL_DIR/backend/requirements-postgres.txt"
   ok "python dependencies updated"
 else

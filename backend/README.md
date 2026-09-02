@@ -9,9 +9,10 @@ PostgreSQL, and serves them over REST and WebSocket. See
 
 ```bash
 cd backend
-python -m venv .venv
-.venv/Scripts/python -m pip install -r requirements-dev.txt   # Windows
-# .venv/bin/pip install -r requirements-dev.txt               # macOS/Linux
+uv sync --group dev   # creates .venv with the exact versions uv.lock pins
+# No uv? python -m venv .venv
+#         .venv/Scripts/python -m pip install -r requirements-dev.txt   # Windows
+#         .venv/bin/pip install -r requirements-dev.txt                 # macOS/Linux
 
 cp .env.example .env
 .venv/Scripts/python -m uvicorn app.main:app --reload

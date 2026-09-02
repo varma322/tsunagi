@@ -15,9 +15,10 @@ for whichever one you are touching.
 
 ```bash
 cd backend
-python -m venv .venv
-.venv/Scripts/python -m pip install -r requirements-dev.txt   # Windows
-# .venv/bin/pip install -r requirements-dev.txt               # macOS/Linux
+uv sync --group dev   # creates .venv with the exact versions uv.lock pins
+# No uv? python -m venv .venv
+#         .venv/Scripts/python -m pip install -r requirements-dev.txt   # Windows
+#         .venv/bin/pip install -r requirements-dev.txt                 # macOS/Linux
 
 cp .env.example .env
 .venv/Scripts/python -m uvicorn app.main:app --reload
@@ -27,6 +28,22 @@ cp .env.example .env
 Development defaults to SQLite, so no database server is required. If you change
 anything schema-related, run against PostgreSQL too — the two dialects differ
 where it matters (see [Dialect differences](#dialect-differences)).
+
+**Adding or changing a dependency.** `backend/pyproject.toml` is the only place
+to edit — `dependencies` for runtime, the `postgres` extra for the production
+driver, the `dev` group for test tooling. `uv.lock` pins the whole transitive
+tree, and the three `requirements*.txt` files are generated from it so the
+bare-metal deploy path (`deployment/update.sh`, which pip-installs on the
+server) stays in step. Regenerate all four together, or the server and the
+image will drift apart:
+
+```bash
+cd backend
+uv lock
+uv export --no-hashes --no-emit-project --no-dev -o requirements.txt
+uv export --no-hashes --no-emit-project --no-dev --extra postgres -o requirements-postgres.txt
+uv export --no-hashes --no-emit-project --group dev -o requirements-dev.txt
+```
 
 **Mind the Python version gap.** The container runs Python 3.12 while your local
 interpreter may be newer, and 3.14 evaluates annotations lazily. Code that
