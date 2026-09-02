@@ -33,3 +33,6 @@ keystore.properties
 *.jks
 *.keystore
 frontend/dist.tar.gz
+
+# Local-only compose overrides (debug stack)
+deployment/docker-compose.override.yml
