@@ -4,7 +4,13 @@ All notable changes to Tsunagi. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.3.0] — 2026-09-03
+
+One capability, server-side only. An operator can now delete a single device's
+messages without revoking the device or touching anyone else's. There is no
+migration, so upgrading a deployment is a rebuild and a restart; the Android app
+is unchanged in substance and an existing install keeps working against a 1.3.0
+server.
 
 ### Added
 
@@ -359,6 +365,7 @@ time — over TLS, with role-based access and single-use device enrolment.
 - R8/minification is disabled for the Android release build.
 - No instrumented end-to-end test of the Android app against a live server.
 
+[1.3.0]: https://github.com/you/tsunagi/releases/tag/v1.3.0
 [1.2.0]: https://github.com/you/tsunagi/releases/tag/v1.2.0
 [1.1.1]: https://github.com/you/tsunagi/releases/tag/v1.1.1
 [1.1.0]: https://github.com/you/tsunagi/releases/tag/v1.1.0

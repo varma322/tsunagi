@@ -31,9 +31,11 @@ android {
         applicationId = "com.vce.tsunagi"
         minSdk = 26
         targetSdk = 36
-        // versionCode must increase for Android to install this over 1.1.1.
-        versionCode = 6
-        versionName = "1.2.0"
+        // versionCode must increase for Android to install this over 1.2.0.
+        // 1.3.0 carries no Android changes -- the release is server-side -- but
+        // the four version fields are kept in agreement.
+        versionCode = 7
+        versionName = "1.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
