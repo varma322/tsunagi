@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Power, RefreshCw, Smartphone, Trash2 } from "lucide-react";
+import { Eraser, Power, RefreshCw, Smartphone, Trash2 } from "lucide-react";
 
 import { ApiError, api, type Device } from "../lib/api";
 import { useAuth, useCredentials } from "../lib/auth";
@@ -65,6 +65,9 @@ export function DevicesPage() {
 
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // Clearing reports how many it deleted, and there is nothing left to check
+  // it against afterwards, so the count is shown rather than a bare success.
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   // Online status is derived from last_seen, so it goes stale without a poll.
   usePolling(reload, 30_000);
@@ -84,6 +87,34 @@ export function DevicesPage() {
     setActionError(null);
     try {
       await api.setDeviceEnabled(credentials, device.id, !device.enabled);
+      reload();
+    } catch (caught) {
+      setActionError((caught as ApiError).message);
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function clearMessages(device: Device) {
+    const confirmed = window.confirm(
+      `Permanently delete every message from "${device.name}"?
+
+This cannot be undone. The ` +
+        `messages are removed from the database — database backups taken earlier still contain ` +
+        `them. The device itself is left alone and keeps uploading.`,
+    );
+    if (!confirmed) return;
+
+    setPendingId(device.id);
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      const { deleted } = await api.clearDeviceMessages(credentials, device.id);
+      setActionNotice(
+        deleted === 0
+          ? `"${device.name}" had no messages to delete.`
+          : `Deleted ${deleted} message${deleted === 1 ? "" : "s"} from "${device.name}".`,
+      );
       reload();
     } catch (caught) {
       setActionError((caught as ApiError).message);
@@ -130,6 +161,11 @@ export function DevicesPage() {
       {error && <ErrorNotice error={error} onRetry={reload} />}
       {actionError && (
         <p className="mb-4 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{actionError}</p>
+      )}
+      {actionNotice && (
+        <p className="mb-4 rounded-lg bg-white/5 px-3 py-2 text-sm text-content-muted">
+          {actionNotice}
+        </p>
       )}
 
       {isAdmin && <AddDevicePanel onDeviceAdded={reload} />}
@@ -235,7 +271,7 @@ export function DevicesPage() {
                 )}
 
                 {isAdmin && (
-                  <div className="mt-5 flex items-center justify-between border-t border-line pt-4">
+                  <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-4">
                     <Button
                       variant={device.enabled ? "secondary" : "primary"}
                       disabled={pendingId === device.id}
@@ -244,14 +280,25 @@ export function DevicesPage() {
                       <Power className="size-4" aria-hidden />
                       {device.enabled ? "Turn off" : "Turn on"}
                     </Button>
-                    <Button
-                      variant="danger"
-                      disabled={pendingId === device.id}
-                      onClick={() => revoke(device)}
-                    >
-                      <Trash2 className="size-4" aria-hidden />
-                      Revoke
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="danger"
+                        disabled={pendingId === device.id}
+                        onClick={() => clearMessages(device)}
+                        title="Permanently delete this device's messages. The device keeps uploading."
+                      >
+                        <Eraser className="size-4" aria-hidden />
+                        Clear messages
+                      </Button>
+                      <Button
+                        variant="danger"
+                        disabled={pendingId === device.id}
+                        onClick={() => revoke(device)}
+                      >
+                        <Trash2 className="size-4" aria-hidden />
+                        Revoke
+                      </Button>
+                    </div>
                   </div>
                 )}
               </Card>
@@ -267,7 +314,9 @@ export function DevicesPage() {
             blocks uploads immediately — the phone is told it was switched off and will not
             re-register itself.{" "}
             <strong className="font-medium text-content">Revoke</strong> is permanent. Neither
-            deletes messages that have already synchronized.
+            deletes messages that have already synchronized —{" "}
+            <strong className="font-medium text-content">Clear messages</strong> is the one that
+            does, and it cannot be undone. It leaves the device registered and uploading.
           </p>
         </Card>
       )}

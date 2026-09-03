@@ -4,6 +4,26 @@ All notable changes to Tsunagi. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Clearing a device's messages.** `DELETE /api/v1/devices/{id}/messages`
+  permanently deletes every message uploaded by one device and reports how many
+  it removed. Admin scope, no schema change, and the device is left registered
+  and uploading. In the dashboard it is a **Clear messages** button on each
+  device card.
+
+  Irreversible by design, and the confirm dialog says so. Two things it does not
+  do, both documented in `API_SPEC.md`: it does not touch the phone's own
+  storage or the Android inbox, and it does not reach database dumps taken
+  beforehand — including the one `deployment/update.sh` writes before every
+  migration — so it is not an erasure tool.
+
+  Recorded in the audit trail as `DEVICE_MESSAGES_CLEARED` with the device, its
+  name and the count. Once the rows are gone that entry is the only remaining
+  record that they existed.
+
 ## [1.2.0] — 2026-09-01
 
 Two capabilities and two fixes. A phone can now pause uploading without losing

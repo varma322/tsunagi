@@ -315,6 +315,15 @@ export const api = {
   revokeDevice: (c: Credentials, id: string) =>
     request<void>(c, `/api/v1/devices/${id}`, { method: "DELETE" }),
 
+  /**
+   * Permanently deletes every message uploaded by one device.
+   *
+   * The only destructive call in this client. Returns the number deleted,
+   * which is the only confirmation available once it has run.
+   */
+  clearDeviceMessages: (c: Credentials, id: string) =>
+    request<{ deleted: number }>(c, `/api/v1/devices/${id}/messages`, { method: "DELETE" }),
+
   createEnrolment: (c: Credentials, label?: string, ttlSeconds?: number) =>
     request<CreatedEnrolment>(c, "/api/v1/enrolments", {
       method: "POST",
