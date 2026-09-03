@@ -20,6 +20,7 @@ from app.schemas import (
     DeviceOut,
     DeviceRegisterRequest,
     DeviceRegisterResponse,
+    MessagesClearedResponse,
 )
 from app.services import DeviceService
 
@@ -101,6 +102,34 @@ async def set_device_enabled(
     await service.set_enabled(device, payload.enabled)
 
     return service.to_out(device)
+
+
+@router.delete(
+    "/{device_id}/messages",
+    response_model=MessagesClearedResponse,
+    summary="Permanently delete this device's messages",
+)
+async def clear_device_messages(
+    device_id: uuid.UUID,
+    _principal: AdminDep,
+    session: SessionDep,
+    bus: BusDep,
+    settings: SettingsDep,
+) -> MessagesClearedResponse:
+    """Delete every message uploaded by one device. **Not reversible.**
+
+    Accepts a revoked device, unlike the other device endpoints: clearing a
+    retired phone's messages is the ordinary reason to call this.
+
+    Note that this empties the table, not the deployment. Database dumps taken
+    before now -- including the one deployment/update.sh writes before every
+    migration -- still contain these messages.
+    """
+    device = await DeviceRepository(session).get(device_id)
+    if device is None:
+        raise not_found("Device not found.")
+    deleted = await DeviceService(session, bus, settings).clear_messages(device)
+    return MessagesClearedResponse(deleted=deleted)
 
 
 @router.delete(

@@ -276,8 +276,17 @@ class MessageRepository:
         )
         return int(result.scalar_one())
 
-    async def delete_for_device(self, device_id: uuid.UUID) -> None:
-        await self.session.execute(delete(Message).where(Message.device_id == device_id))
+    async def delete_for_device(self, device_id: uuid.UUID) -> int:
+        """Delete every message from one device, returning how many.
+
+        The count is not decoration: it is the only confirmation the operator
+        gets that the call matched what they expected, and once this returns
+        there is nothing left to compare against.
+        """
+        result = await self.session.execute(
+            delete(Message).where(Message.device_id == device_id)
+        )
+        return int(result.rowcount or 0)
 
 
 class EnrolmentRepository:

@@ -43,6 +43,7 @@ Three credential types share the same header:
 | `GET /messages`, `/search`, `/wait` | — | ✅ | ✅ |
 | `GET /devices`, `/stats`, `/stats/volume` | — | ✅ | ✅ |
 | `POST /devices/{id}/enabled`, `DELETE /devices/{id}` | — | — | ✅ |
+| `DELETE /devices/{id}/messages` | — | — | ✅ |
 | `/keys` (all methods) | — | — | ✅ |
 | `/enrolments` (all methods) | — | — | ✅ |
 | `GET /events` | — | — | ✅ |
@@ -325,6 +326,47 @@ the phone needing to re-enrol.
 > stale" and re-enrols using its stored setup key. Answering `401` for a
 > switched-off device would let it walk straight back in under a new id and
 > defeat the off switch. `403` is terminal on the client.
+
+### Clear a Device's Messages
+
+```http
+DELETE /api/v1/devices/{device_id}/messages
+```
+
+Admin scope. **Permanently deletes** every message uploaded by this device.
+Not reversible, and there is no soft-delete or restore behind it. The device
+itself is untouched — it stays registered, keeps its token, and goes on
+uploading.
+
+Response `200 OK` with the number of rows deleted, which is the only
+confirmation available once the call has run:
+
+```json
+{ "deleted": 1284 }
+```
+
+Clearing a device that has no messages reports `0`. `404` if the device does
+not exist.
+
+Unlike the other device endpoints, a **revoked device is accepted** — clearing
+a retired phone's messages is the ordinary reason to call this.
+
+Recorded in the durable audit trail as `DEVICE_MESSAGES_CLEARED`, with the
+device id, its name and the count. That entry is the only record that the
+messages ever existed once the rows are gone.
+
+> **Cleared is not erased.** This empties the table, not the deployment. Any
+> database dump taken beforehand still contains these messages, including the
+> one `deployment/update.sh` writes before every migration. If the requirement
+> is that the data no longer exist anywhere, clearing is a first step and the
+> backups are the rest of the job.
+
+> **The phone is not touched.** Nothing is deleted from the device's own
+> storage or from the Android SMS inbox, and the phone's local record of what
+> it has already synchronized is unaffected — so cleared messages are not
+> re-uploaded on the next sync. They can come back if that local record is
+> reset, by a reinstall for instance, since the server no longer holds an id to
+> recognise them by.
 
 ### Revoke Device
 

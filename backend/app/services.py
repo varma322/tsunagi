@@ -246,6 +246,33 @@ class DeviceService:
             {"type": "device.status", "data": {"device_id": str(device.id), "status": False}}
         )
 
+    async def clear_messages(self, device: Device) -> int:
+        """Permanently delete a device's messages, returning how many.
+
+        The only destructive operation in the API. Everything else that looks
+        like a delete is reversible -- an off switch, a revocation that keeps
+        the row -- so this one is deliberately explicit rather than folded into
+        revoke, where an operator retiring a phone would trigger it without
+        having decided to.
+
+        The audit event is the point of care here. After this commits, the
+        messages are gone and the trail is the only remaining record that they
+        existed at all, so it carries the device, its name and the count.
+
+        No guard on a revoked device: clearing a retired phone's messages is
+        the ordinary reason to reach for this.
+        """
+        deleted = await self.messages.delete_for_device(device.id)
+        await self.session.commit()
+        await self.bus.emit(
+            "DEVICE_MESSAGES_CLEARED",
+            LEVEL_WARN,
+            device_id=str(device.id),
+            name=device.name,
+            count=deleted,
+        )
+        return deleted
+
 
 class EnrolmentService:
     def __init__(self, session: AsyncSession, bus: EventBus, settings: Settings) -> None:

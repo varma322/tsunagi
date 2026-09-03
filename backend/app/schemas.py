@@ -98,6 +98,16 @@ class DeviceEnabledRequest(BaseModel):
     enabled: bool
 
 
+class MessagesClearedResponse(BaseModel):
+    """How many messages were deleted.
+
+    Reported because the operator has no other way to check: once the call
+    returns there is nothing left to count.
+    """
+
+    deleted: int
+
+
 # --- enrolment ------------------------------------------------------------
 
 
